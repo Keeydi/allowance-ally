@@ -51,14 +51,17 @@ const FeaturesSection = () => {
           {features.map((feature, index) => (
             <div
               key={feature.title}
-              className="group relative rounded-2xl border border-border bg-background p-6 transition-all duration-300 hover:shadow-card hover:border-primary/20 animate-fade-up"
+              className="group relative rounded-2xl border border-border bg-background p-6 transition-all duration-300 hover:shadow-card hover:border-primary/20 hover:-translate-y-2 animate-fade-up"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-secondary text-secondary-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                <feature.icon className="h-6 w-6" />
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-secondary text-secondary-foreground transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground group-hover:scale-110 group-hover:rotate-3">
+                <feature.icon className="h-6 w-6 transition-transform group-hover:scale-110" />
               </div>
-              <h3 className="mb-2 text-lg font-semibold text-foreground">{feature.title}</h3>
+              <h3 className="mb-2 text-lg font-semibold text-foreground group-hover:text-primary transition-colors">{feature.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+              
+              {/* Hover glow effect */}
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             </div>
           ))}
         </div>
