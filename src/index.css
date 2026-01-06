@@ -181,3 +181,18 @@
     transform: scale(1);
   }
 }
+
+@keyframes scaleX {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-scale-x {
+  animation: scaleX 0.8s ease-out 0.5s forwards;
+  transform-origin: left;
+  transform: scaleX(0);
+}
