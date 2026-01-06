@@ -52,20 +52,21 @@ const Dashboard = () => {
         {/* Quick Actions */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { icon: Plus, label: "Add Allowance", color: "bg-success-light text-success" },
-            { icon: Minus, label: "Add Expense", color: "bg-warning-light text-warning" },
-            { icon: Target, label: "Set Budget", color: "bg-info-light text-info" },
-            { icon: PiggyBank, label: "Add Savings", color: "bg-secondary text-secondary-foreground" },
+            { icon: Plus, label: "Add Allowance", color: "bg-success-light text-success", link: "/budget" },
+            { icon: Minus, label: "Add Expense", color: "bg-warning-light text-warning", link: "/expenses" },
+            { icon: Target, label: "Set Budget", color: "bg-info-light text-info", link: "/budget" },
+            { icon: PiggyBank, label: "Add Savings", color: "bg-secondary text-secondary-foreground", link: "/savings" },
           ].map((action) => (
-            <button
+            <Link
               key={action.label}
+              to={action.link}
               className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-card hover:shadow-card transition-all group"
             >
               <div className={`p-3 rounded-lg ${action.color} transition-transform group-hover:scale-110`}>
                 <action.icon className="h-5 w-5" />
               </div>
               <span className="text-sm font-medium text-foreground">{action.label}</span>
-            </button>
+            </Link>
           ))}
         </div>
 
