@@ -16,6 +16,8 @@ const Header = () => {
     { href: "/expenses", label: "Expenses" },
     { href: "/budget", label: "Budget" },
     { href: "/savings", label: "Savings" },
+    { href: "/reports", label: "Reports" },
+    { href: "/achievements", label: "Achievements" },
   ];
 
   return (
