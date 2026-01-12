@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Play, Video } from "lucide-react";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
+import { UserLayout } from "@/components/layout/UserLayout";
 import type { VideoTip } from "./admin/AdminVideoTips";
 
 const VideoTips = () => {
@@ -25,14 +24,7 @@ const VideoTips = () => {
     : videos.filter((v) => v.category === selectedCategory);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Header />
-      
-      <main className="flex-1 container py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Video Tips</h1>
-          <p className="text-muted-foreground mt-1">Learn budgeting and savings tips from our curated videos</p>
-        </div>
+    <UserLayout title="Video Tips" subtitle="Learn budgeting and savings tips from our curated videos">
 
         {/* Category Filter */}
         <div className="flex flex-wrap gap-2 mb-8">
@@ -115,10 +107,7 @@ const VideoTips = () => {
             </div>
           </DialogContent>
         </Dialog>
-      </main>
-
-      <Footer />
-    </div>
+    </UserLayout>
   );
 };
 

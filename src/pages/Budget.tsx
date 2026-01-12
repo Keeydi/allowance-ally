@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import Header from "@/components/layout/Header";
+import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check } from "lucide-react";
+import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check } from "lucide-react";
 import { toast } from "sonner";
 
 interface BudgetCategory {
@@ -54,21 +53,8 @@ const Budget = () => {
   const remaining = totalAllowance - totalSpent;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Link to="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Budget Planning</h1>
-            <p className="text-muted-foreground text-sm">Allocate your money wisely</p>
-          </div>
-        </div>
+    <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
+      <div className="max-w-4xl mx-auto">
 
         {/* Allowance Card */}
         <div className="rounded-2xl bg-gradient-primary p-6 text-primary-foreground mb-6">
@@ -200,8 +186,8 @@ const Budget = () => {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

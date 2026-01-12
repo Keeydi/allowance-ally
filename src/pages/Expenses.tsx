@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import Header from "@/components/layout/Header";
+import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-  ArrowLeft, 
   Plus, 
   Trash2,
   Utensils,
@@ -80,21 +78,8 @@ const Expenses = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Link to="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Expense Tracking</h1>
-            <p className="text-muted-foreground text-sm">Track where your money goes</p>
-          </div>
-        </div>
+    <UserLayout title="Expense Tracking" subtitle="Track where your money goes">
+      <div className="max-w-4xl mx-auto">
 
         {/* Summary Card */}
         <div className="rounded-2xl bg-gradient-warning p-6 text-white mb-6">
@@ -212,8 +197,8 @@ const Expenses = () => {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 
