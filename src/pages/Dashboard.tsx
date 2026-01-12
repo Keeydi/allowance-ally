@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import Header from "@/components/layout/Header";
+import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -35,10 +35,8 @@ const Dashboard = () => {
   const savingsProgress = (mockData.savingsGoal.current / mockData.savingsGoal.target) * 100;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container py-8">
+    <UserLayout title="Dashboard" subtitle="Your financial overview">
+      <div className="max-w-6xl mx-auto">
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground md:text-3xl">
@@ -214,8 +212,8 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Star, Send, MessageSquare, ThumbsUp, CheckCircle2 } from "lucide-react";
+import { Star, Send, MessageSquare, ThumbsUp, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import Header from "@/components/layout/Header";
+import { UserLayout } from "@/components/layout/UserLayout";
 import { useToast } from "@/hooks/use-toast";
 
 interface RatingCategory {
@@ -58,64 +58,46 @@ const Feedback = () => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="container py-8">
-          <Card className="max-w-2xl mx-auto animate-fade-in">
-            <CardContent className="p-12 text-center">
-              <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="h-10 w-10 text-success" />
+      <UserLayout title="User Feedback" subtitle="Help us improve Budget Buddy">
+        <Card className="max-w-2xl mx-auto animate-fade-in">
+          <CardContent className="p-12 text-center">
+            <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="h-10 w-10 text-success" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-3">Thank You!</h2>
+            <p className="text-muted-foreground mb-6">
+              Your feedback has been submitted successfully. We appreciate your time in helping us improve Budget Buddy.
+            </p>
+            <div className="bg-muted/30 rounded-lg p-4 mb-6">
+              <p className="text-sm text-muted-foreground mb-2">Your average rating</p>
+              <div className="flex items-center justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`h-6 w-6 ${
+                      star <= Math.round(averageRating)
+                        ? "text-warning fill-warning"
+                        : "text-muted-foreground/30"
+                    }`}
+                  />
+                ))}
+                <span className="text-lg font-semibold text-foreground ml-2">
+                  {averageRating.toFixed(1)}
+                </span>
               </div>
-              <h2 className="text-2xl font-bold text-foreground mb-3">Thank You!</h2>
-              <p className="text-muted-foreground mb-6">
-                Your feedback has been submitted successfully. We appreciate your time in helping us improve Budget Buddy.
-              </p>
-              <div className="bg-muted/30 rounded-lg p-4 mb-6">
-                <p className="text-sm text-muted-foreground mb-2">Your average rating</p>
-                <div className="flex items-center justify-center gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      className={`h-6 w-6 ${
-                        star <= Math.round(averageRating)
-                          ? "text-warning fill-warning"
-                          : "text-muted-foreground/30"
-                      }`}
-                    />
-                  ))}
-                  <span className="text-lg font-semibold text-foreground ml-2">
-                    {averageRating.toFixed(1)}
-                  </span>
-                </div>
-              </div>
-              <Link to="/dashboard">
-                <Button variant="default">Back to Dashboard</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+            </div>
+            <Link to="/dashboard">
+              <Button variant="default">Back to Dashboard</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </UserLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Link to="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">User Feedback</h1>
-            <p className="text-muted-foreground text-sm">Help us improve Budget Buddy</p>
-          </div>
-        </div>
-
-        <div className="max-w-3xl mx-auto space-y-6">
+    <UserLayout title="User Feedback" subtitle="Help us improve Budget Buddy">
+      <div className="max-w-3xl mx-auto space-y-6">
           {/* Introduction */}
           <Card className="animate-fade-in bg-gradient-to-br from-primary/5 to-success/5 border-primary/20">
             <CardContent className="p-6">
@@ -247,26 +229,25 @@ const Feedback = () => {
             </CardContent>
           </Card>
 
-          {/* Submit Button */}
-          <div className="flex justify-center">
-            <Button 
-              onClick={handleSubmit}
-              size="lg"
-              className="w-full sm:w-auto px-12"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Submit Feedback
-            </Button>
-          </div>
-
-          {/* Privacy Note */}
-          <p className="text-center text-xs text-muted-foreground">
-            Your feedback is anonymous and will only be used for research purposes. 
-            Thank you for helping us improve Budget Buddy!
-          </p>
+        {/* Submit Button */}
+        <div className="flex justify-center">
+          <Button 
+            onClick={handleSubmit}
+            size="lg"
+            className="w-full sm:w-auto px-12"
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Submit Feedback
+          </Button>
         </div>
-      </main>
-    </div>
+
+        {/* Privacy Note */}
+        <p className="text-center text-xs text-muted-foreground">
+          Your feedback is anonymous and will only be used for research purposes. 
+          Thank you for helping us improve Budget Buddy!
+        </p>
+      </div>
+    </UserLayout>
   );
 };
 

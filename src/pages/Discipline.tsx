@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, AlertTriangle, CheckCircle2, Lightbulb, ShieldCheck, TrendingDown, Flame, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lightbulb, ShieldCheck, TrendingDown, Flame, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import Header from "@/components/layout/Header";
+import { UserLayout } from "@/components/layout/UserLayout";
 
 interface Alert {
   id: string;
@@ -144,21 +143,8 @@ const Discipline = () => {
   const followedRules = disciplineRules.filter(r => r.isFollowed).length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Link to="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Spending Discipline</h1>
-            <p className="text-muted-foreground text-sm">Stay on track with your financial goals</p>
-          </div>
-        </div>
+    <UserLayout title="Spending Discipline" subtitle="Stay on track with your financial goals">
+      <div className="max-w-6xl mx-auto">
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
@@ -336,8 +322,8 @@ const Discipline = () => {
             </Card>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

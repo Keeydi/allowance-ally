@@ -1,15 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, TrendingUp, TrendingDown, PieChart, BarChart3, Calendar } from "lucide-react";
+import { TrendingUp, TrendingDown, PieChart, BarChart3, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Header from "@/components/layout/Header";
+import { UserLayout } from "@/components/layout/UserLayout";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
 } from "@/components/ui/chart";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, LineChart, Line, ResponsiveContainer } from "recharts";
 
@@ -61,21 +58,8 @@ const Reports = () => {
   const topCategory = expensesByCategory.reduce((a, b) => a.value > b.value ? a : b);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Link to="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Reports & Insights</h1>
-            <p className="text-muted-foreground text-sm">Understand your spending behavior</p>
-          </div>
-        </div>
+    <UserLayout title="Reports & Insights" subtitle="Understand your spending behavior">
+      <div className="max-w-6xl mx-auto">
 
         {/* Period Selector */}
         <div className="flex gap-2 mb-6">
@@ -336,8 +320,8 @@ const Reports = () => {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 
