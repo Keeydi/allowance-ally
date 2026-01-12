@@ -11,8 +11,11 @@ import Budget from "./pages/Budget";
 import Savings from "./pages/Savings";
 import Reports from "./pages/Reports";
 import Discipline from "./pages/Discipline";
-import Achievements from "./pages/Achievements";
 import Feedback from "./pages/Feedback";
+import VideoTips from "./pages/VideoTips";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminVideoTips from "./pages/admin/AdminVideoTips";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,8 +35,11 @@ const App = () => (
           <Route path="/savings" element={<Savings />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/discipline" element={<Discipline />} />
-          <Route path="/achievements" element={<Achievements />} />
           <Route path="/feedback" element={<Feedback />} />
+          <Route path="/video-tips" element={<VideoTips />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/video-tips" element={<AdminVideoTips />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
