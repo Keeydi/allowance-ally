@@ -1,43 +1,11 @@
 import { useState, useEffect } from "react";
-import { AlertTriangle, CheckCircle2, Lightbulb, ShieldCheck, TrendingDown, Flame, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lightbulb, ShieldCheck, TrendingDown, Flame, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { UserLayout } from "@/components/layout/UserLayout";
-
-interface Alert {
-  id: string;
-  type: "warning" | "danger" | "success";
-  title: string;
-  message: string;
-  category?: string;
-  percentage?: number;
-}
-
-const mockAlerts: Alert[] = [
-  {
-    id: "1",
-    type: "danger",
-    title: "Budget Limit Reached!",
-    message: "You've spent 100% of your 'Wants' budget for this week.",
-    category: "Wants",
-    percentage: 100,
-  },
-  {
-    id: "2",
-    type: "warning",
-    title: "Approaching Limit",
-    message: "You've used 85% of your 'Food' budget. ₱75 remaining.",
-    category: "Food",
-    percentage: 85,
-  },
-  {
-    id: "3",
-    type: "success",
-    title: "Great Savings!",
-    message: "You've saved ₱200 this week. Keep it up!",
-  },
-];
+import { getDiscipline, Alert, DisciplineRule } from "@/lib/api/discipline";
+import { useToast } from "@/hooks/use-toast";
 
 const dailyTips = [
   {
@@ -72,18 +40,53 @@ const dailyTips = [
   },
 ];
 
-const disciplineRules = [
-  { rule: "Track expenses daily", isFollowed: true },
-  { rule: "Stay within budget categories", isFollowed: false },
-  { rule: "Save at least 20% of allowance", isFollowed: true },
-  { rule: "No impulse purchases", isFollowed: true },
-  { rule: "Review spending weekly", isFollowed: false },
-];
-
 const Discipline = () => {
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [disciplineRules, setDisciplineRules] = useState<DisciplineRule[]>([]);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [disciplineScore, setDisciplineScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  // Fetch discipline data
+  useEffect(() => {
+    fetchDisciplineData();
+  }, []);
+
+  const fetchDisciplineData = async () => {
+    setLoading(true);
+    const response = await getDiscipline();
+    if (response.success && response.data) {
+      setAlerts(response.data.alerts);
+      setDisciplineRules(response.data.rules);
+      setStreak(response.data.streak);
+      
+      // Animate discipline score
+      const targetScore = response.data.disciplineScore;
+      const duration = 1500;
+      const steps = 60;
+      const increment = targetScore / steps;
+      let current = 0;
+      
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= targetScore) {
+          setDisciplineScore(targetScore);
+          clearInterval(timer);
+        } else {
+          setDisciplineScore(Math.round(current));
+        }
+      }, duration / steps);
+    } else {
+      toast({
+        title: "Error",
+        description: response.message || "Failed to load discipline data",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
+  };
 
   // Cycle through tips
   useEffect(() => {
@@ -91,27 +94,6 @@ const Discipline = () => {
       setCurrentTipIndex((prev) => (prev + 1) % dailyTips.length);
     }, 8000);
     return () => clearInterval(interval);
-  }, []);
-
-  // Animate discipline score
-  useEffect(() => {
-    const targetScore = 72;
-    const duration = 1500;
-    const steps = 60;
-    const increment = targetScore / steps;
-    let current = 0;
-    
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= targetScore) {
-        setDisciplineScore(targetScore);
-        clearInterval(timer);
-      } else {
-        setDisciplineScore(Math.round(current));
-      }
-    }, duration / steps);
-    
-    return () => clearInterval(timer);
   }, []);
 
   const dismissAlert = (id: string) => {
@@ -142,6 +124,17 @@ const Discipline = () => {
 
   const followedRules = disciplineRules.filter(r => r.isFollowed).length;
 
+  if (loading) {
+    return (
+      <UserLayout title="Spending Discipline" subtitle="Stay on track with your financial goals">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+          <span className="text-muted-foreground">Loading discipline data...</span>
+        </div>
+      </UserLayout>
+    );
+  }
+
   return (
     <UserLayout title="Spending Discipline" subtitle="Stay on track with your financial goals">
       <div className="max-w-6xl mx-auto">
@@ -170,7 +163,12 @@ const Discipline = () => {
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Flame className="h-4 w-4 text-warning" />
-                  <span>Keep a 7-day streak to boost your score!</span>
+                  <span>
+                    {streak >= 7 
+                      ? `Amazing! You have a ${streak}-day streak! 🔥`
+                      : `Keep a 7-day streak to boost your score! Current: ${streak} days`
+                    }
+                  </span>
                 </div>
               </CardContent>
             </Card>

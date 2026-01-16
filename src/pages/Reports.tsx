@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { TrendingUp, TrendingDown, PieChart, BarChart3, Calendar } from "lucide-react";
+import { useState, useEffect } from "react";
+import { TrendingUp, TrendingDown, PieChart, BarChart3, Calendar, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserLayout } from "@/components/layout/UserLayout";
@@ -9,38 +9,8 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, LineChart, Line, ResponsiveContainer } from "recharts";
-
-// Mock data for charts
-const expensesByCategory = [
-  { name: "Food", value: 450, fill: "hsl(var(--success))" },
-  { name: "Transportation", value: 200, fill: "hsl(var(--warning))" },
-  { name: "School", value: 300, fill: "hsl(var(--info))" },
-  { name: "Wants", value: 150, fill: "hsl(var(--destructive))" },
-  { name: "Others", value: 100, fill: "hsl(var(--muted-foreground))" },
-];
-
-const weeklyTrend = [
-  { day: "Mon", spent: 120, budget: 150 },
-  { day: "Tue", spent: 80, budget: 150 },
-  { day: "Wed", spent: 200, budget: 150 },
-  { day: "Thu", spent: 90, budget: 150 },
-  { day: "Fri", spent: 180, budget: 150 },
-  { day: "Sat", spent: 250, budget: 150 },
-  { day: "Sun", spent: 100, budget: 150 },
-];
-
-const budgetVsActual = [
-  { category: "Needs", budget: 600, actual: 550 },
-  { category: "Wants", budget: 300, actual: 380 },
-  { category: "Savings", budget: 300, actual: 200 },
-];
-
-const monthlyOverview = [
-  { month: "Jan", income: 3000, expenses: 2400 },
-  { month: "Feb", income: 3000, expenses: 2100 },
-  { month: "Mar", income: 3200, expenses: 2800 },
-  { month: "Apr", income: 3000, expenses: 2200 },
-];
+import { getReports, ReportsData } from "@/lib/api/reports";
+import { useToast } from "@/hooks/use-toast";
 
 const chartConfig = {
   spent: { label: "Spent", color: "hsl(var(--destructive))" },
@@ -52,10 +22,42 @@ const chartConfig = {
 
 const Reports = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month">("week");
-  
-  const totalExpenses = expensesByCategory.reduce((sum, cat) => sum + cat.value, 0);
-  const avgDaily = Math.round(totalExpenses / 7);
-  const topCategory = expensesByCategory.reduce((a, b) => a.value > b.value ? a : b);
+  const [reportsData, setReportsData] = useState<ReportsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchReports();
+  }, [selectedPeriod]);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    const response = await getReports(selectedPeriod);
+    if (response.success && response.data) {
+      setReportsData(response.data);
+    } else {
+      toast({
+        title: "Error",
+        description: response.message || "Failed to load reports",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
+  };
+
+  if (loading || !reportsData) {
+    return (
+      <UserLayout title="Reports & Insights" subtitle="Understand your spending behavior">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+          <span className="text-muted-foreground">Loading reports...</span>
+        </div>
+      </UserLayout>
+    );
+  }
+
+  const { expensesByCategory, weeklyTrend, budgetVsActual, monthlyOverview, summary, insights, recommendations } = reportsData;
+  const { totalExpenses, avgDaily, topCategory } = summary;
 
   return (
     <UserLayout title="Reports & Insights" subtitle="Understand your spending behavior">
@@ -67,6 +69,7 @@ const Reports = () => {
             variant={selectedPeriod === "week" ? "default" : "outline"}
             size="sm"
             onClick={() => setSelectedPeriod("week")}
+            disabled={loading}
           >
             <Calendar className="h-4 w-4 mr-2" />
             This Week
@@ -75,6 +78,7 @@ const Reports = () => {
             variant={selectedPeriod === "month" ? "default" : "outline"}
             size="sm"
             onClick={() => setSelectedPeriod("month")}
+            disabled={loading}
           >
             <Calendar className="h-4 w-4 mr-2" />
             This Month
@@ -119,7 +123,7 @@ const Reports = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Top Category</p>
-                  <p className="text-2xl font-bold text-foreground">{topCategory.name}</p>
+                  <p className="text-2xl font-bold text-foreground">{topCategory}</p>
                 </div>
               </div>
             </CardContent>
@@ -286,35 +290,26 @@ const Reports = () => {
               <div className="space-y-4">
                 <h4 className="font-semibold text-foreground">Key Insights</h4>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <span className="text-warning">•</span>
-                    <span>You tend to spend more on weekends. Consider setting stricter weekend budgets.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-success">•</span>
-                    <span>Food is your largest expense category at 37% of total spending.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-destructive">•</span>
-                    <span>You've exceeded your "Wants" budget by ₱80 this month.</span>
-                  </li>
+                  {insights.map((insight, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-warning">•</span>
+                      <span>{insight}</span>
+                    </li>
+                  ))}
+                  {insights.length === 0 && (
+                    <li className="text-muted-foreground">No insights available yet. Start tracking expenses to see insights!</li>
+                  )}
                 </ul>
               </div>
               <div className="space-y-4">
                 <h4 className="font-semibold text-foreground">Recommendations</h4>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary">💡</span>
-                    <span>Try meal prepping to reduce daily food expenses.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary">💡</span>
-                    <span>Set up a "no-spend" day once a week to boost savings.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary">💡</span>
-                    <span>Transfer savings immediately when you receive allowance.</span>
-                  </li>
+                  {recommendations.map((rec, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-primary">💡</span>
+                      <span>{rec}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>

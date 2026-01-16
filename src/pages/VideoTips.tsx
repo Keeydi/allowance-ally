@@ -1,21 +1,36 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Play, Video } from "lucide-react";
+import { Play, Video, Loader2 } from "lucide-react";
 import { UserLayout } from "@/components/layout/UserLayout";
-import type { VideoTip } from "./admin/AdminVideoTips";
+import { getAllVideoTips, VideoTip } from "@/lib/api/videoTips";
+import { useToast } from "@/hooks/use-toast";
 
 const VideoTips = () => {
   const [videos, setVideos] = useState<VideoTip[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<VideoTip | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const stored = localStorage.getItem("videoTips");
-    if (stored) {
-      setVideos(JSON.parse(stored));
-    }
+    fetchVideos();
   }, []);
+
+  const fetchVideos = async () => {
+    setLoading(true);
+    const response = await getAllVideoTips();
+    if (response.success && response.videos) {
+      setVideos(response.videos);
+    } else {
+      toast({
+        title: "Error",
+        description: response.message || "Failed to load video tips",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
+  };
 
   const categories = ["All", ...Array.from(new Set(videos.map((v) => v.category)))];
   
@@ -44,8 +59,14 @@ const VideoTips = () => {
         </div>
 
         {/* Video Grid */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredVideos.map((video) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Loading videos...</span>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredVideos.map((video) => (
             <Card 
               key={video.id} 
               className="border-border/50 bg-card/50 overflow-hidden cursor-pointer group hover:shadow-lg transition-all"
@@ -75,10 +96,11 @@ const VideoTips = () => {
                 <p className="text-sm text-muted-foreground line-clamp-2">{video.description}</p>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {filteredVideos.length === 0 && (
+        {!loading && filteredVideos.length === 0 && (
           <div className="text-center py-12">
             <Video className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No videos available yet. Check back later!</p>

@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -26,22 +28,101 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/budget" element={<Budget />} />
-          <Route path="/savings" element={<Savings />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/discipline" element={<Discipline />} />
-          <Route path="/feedback" element={<Feedback />} />
-          <Route path="/video-tips" element={<VideoTips />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/video-tips" element={<AdminVideoTips />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/expenses" 
+              element={
+                <ProtectedRoute>
+                  <Expenses />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/budget" 
+              element={
+                <ProtectedRoute>
+                  <Budget />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/savings" 
+              element={
+                <ProtectedRoute>
+                  <Savings />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/reports" 
+              element={
+                <ProtectedRoute>
+                  <Reports />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/discipline" 
+              element={
+                <ProtectedRoute>
+                  <Discipline />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/feedback" 
+              element={
+                <ProtectedRoute>
+                  <Feedback />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/video-tips" 
+              element={
+                <ProtectedRoute>
+                  <VideoTips />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/users" 
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminUsers />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/video-tips" 
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminVideoTips />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

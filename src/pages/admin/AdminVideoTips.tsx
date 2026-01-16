@@ -5,109 +5,94 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, Video } from "lucide-react";
-import { Link } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
-
-export interface VideoTip {
-  id: string;
-  title: string;
-  description: string;
-  videoUrl: string;
-  thumbnail: string;
-  category: string;
-  createdAt: string;
-}
-
-const defaultVideos: VideoTip[] = [
-  {
-    id: "1",
-    title: "50/30/20 Budgeting Rule Explained",
-    description: "Learn the popular 50/30/20 budgeting method to manage your money effectively.",
-    videoUrl: "https://www.youtube.com/embed/HQzoZfc3GwQ",
-    thumbnail: "https://img.youtube.com/vi/HQzoZfc3GwQ/maxresdefault.jpg",
-    category: "Budgeting",
-    createdAt: "2025-01-05",
-  },
-  {
-    id: "2",
-    title: "How to Start an Emergency Fund",
-    description: "Essential tips for building your emergency savings from scratch.",
-    videoUrl: "https://www.youtube.com/embed/fVToMS2Q3XQ",
-    thumbnail: "https://img.youtube.com/vi/fVToMS2Q3XQ/maxresdefault.jpg",
-    category: "Savings",
-    createdAt: "2025-01-08",
-  },
-  {
-    id: "3",
-    title: "Track Your Daily Expenses",
-    description: "Simple methods to track and reduce your daily spending habits.",
-    videoUrl: "https://www.youtube.com/embed/sVKQn2I4HDM",
-    thumbnail: "https://img.youtube.com/vi/sVKQn2I4HDM/maxresdefault.jpg",
-    category: "Expenses",
-    createdAt: "2025-01-10",
-  },
-];
+import { Plus, Edit, Trash2, Video, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import { getAdminVideoTips, createVideoTip, updateVideoTip, deleteVideoTip, VideoTip } from "@/lib/api/videoTips";
 
 const AdminVideoTips = () => {
   const [videos, setVideos] = useState<VideoTip[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingVideo, setEditingVideo] = useState<VideoTip | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     videoUrl: "",
     category: "",
   });
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const stored = localStorage.getItem("videoTips");
-    if (stored) {
-      setVideos(JSON.parse(stored));
-    } else {
-      setVideos(defaultVideos);
-      localStorage.setItem("videoTips", JSON.stringify(defaultVideos));
-    }
-  }, []);
-
-  const extractVideoId = (url: string) => {
-    const match = url.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^&\s]+)/);
-    return match ? match[1] : null;
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate("/admin");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const videoId = extractVideoId(formData.videoUrl);
-    const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : formData.videoUrl;
-    const thumbnail = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : "";
+  useEffect(() => {
+    fetchVideos();
+  }, []);
 
-    if (editingVideo) {
-      const updated = videos.map((v) =>
-        v.id === editingVideo.id
-          ? { ...v, ...formData, videoUrl: embedUrl, thumbnail }
-          : v
-      );
-      setVideos(updated);
-      localStorage.setItem("videoTips", JSON.stringify(updated));
-      toast({ title: "Video updated successfully!" });
+  const fetchVideos = async () => {
+    setLoading(true);
+    const response = await getAdminVideoTips();
+    if (response.success && response.videos) {
+      setVideos(response.videos);
     } else {
-      const newVideo: VideoTip = {
-        id: Date.now().toString(),
-        ...formData,
-        videoUrl: embedUrl,
-        thumbnail,
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      const updated = [...videos, newVideo];
-      setVideos(updated);
-      localStorage.setItem("videoTips", JSON.stringify(updated));
-      toast({ title: "Video added successfully!" });
+      toast({
+        title: "Error",
+        description: response.message || "Failed to load video tips",
+        variant: "destructive",
+      });
     }
+    setLoading(false);
+  };
 
-    setFormData({ title: "", description: "", videoUrl: "", category: "" });
-    setEditingVideo(null);
-    setIsDialogOpen(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      if (editingVideo) {
+        const response = await updateVideoTip(editingVideo.id, formData);
+        if (response.success) {
+          toast({ title: "Video updated successfully!" });
+          await fetchVideos();
+          setIsDialogOpen(false);
+          setEditingVideo(null);
+          setFormData({ title: "", description: "", videoUrl: "", category: "" });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to update video",
+            variant: "destructive",
+          });
+        }
+      } else {
+        const response = await createVideoTip(formData);
+        if (response.success) {
+          toast({ title: "Video added successfully!" });
+          await fetchVideos();
+          setIsDialogOpen(false);
+          setFormData({ title: "", description: "", videoUrl: "", category: "" });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to create video",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEdit = (video: VideoTip) => {
@@ -121,11 +106,22 @@ const AdminVideoTips = () => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    const updated = videos.filter((v) => v.id !== id);
-    setVideos(updated);
-    localStorage.setItem("videoTips", JSON.stringify(updated));
-    toast({ title: "Video deleted successfully!" });
+  const handleDelete = async (id: string | number) => {
+    if (!confirm("Are you sure you want to delete this video?")) {
+      return;
+    }
+
+    const response = await deleteVideoTip(id);
+    if (response.success) {
+      toast({ title: "Video deleted successfully!" });
+      await fetchVideos();
+    } else {
+      toast({
+        title: "Error",
+        description: response.message || "Failed to delete video",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -133,16 +129,19 @@ const AdminVideoTips = () => {
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-card/80 backdrop-blur-md">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link to="/" className="text-xl font-bold text-foreground">
+            <button 
+              onClick={handleLogoClick}
+              className="text-xl font-bold text-foreground hover:opacity-80 transition-opacity"
+            >
               Budget<span className="text-primary">Buddy</span>
               <span className="ml-2 text-sm font-normal text-muted-foreground">Admin</span>
-            </Link>
+            </button>
           </div>
           <nav className="flex items-center gap-6">
             <Link to="/admin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
             <Link to="/admin/users" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Users</Link>
             <Link to="/admin/video-tips" className="text-sm font-medium text-foreground">Video Tips</Link>
-            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
+            <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">User Dashboard</Link>
           </nav>
         </div>
       </header>
@@ -205,16 +204,29 @@ const AdminVideoTips = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  {editingVideo ? "Update Video" : "Add Video"}
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {editingVideo ? "Updating..." : "Adding..."}
+                    </>
+                  ) : (
+                    editingVideo ? "Update Video" : "Add Video"
+                  )}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {videos.map((video) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Loading videos...</span>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {videos.map((video) => (
             <Card key={video.id} className="border-border/50 bg-card/50 overflow-hidden group">
               <div className="relative aspect-video bg-muted">
                 {video.thumbnail ? (
@@ -244,10 +256,11 @@ const AdminVideoTips = () => {
                 <p className="text-sm text-muted-foreground line-clamp-2">{video.description}</p>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {videos.length === 0 && (
+        {!loading && videos.length === 0 && (
           <div className="text-center py-12">
             <Video className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No videos added yet. Click "Add Video" to get started.</p>

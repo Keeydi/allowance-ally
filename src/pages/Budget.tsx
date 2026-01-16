@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check } from "lucide-react";
+import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getBudget, updateBudget, Budget } from "@/lib/api/budget";
+import { useToast } from "@/hooks/use-toast";
 
 interface BudgetCategory {
   id: string;
@@ -16,41 +18,108 @@ interface BudgetCategory {
 }
 
 const Budget = () => {
-  const [totalAllowance, setTotalAllowance] = useState(2500);
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isEditingAllowance, setIsEditingAllowance] = useState(false);
-  const [tempAllowance, setTempAllowance] = useState(totalAllowance.toString());
-  
-  const [categories, setCategories] = useState<BudgetCategory[]>([
-    { id: "needs", name: "Needs", icon: Wallet, allocation: 50, spent: 800, color: "bg-blue-500" },
-    { id: "wants", name: "Wants", icon: ShoppingBag, allocation: 30, spent: 450, color: "bg-pink-500" },
-    { id: "savings", name: "Savings", icon: PiggyBank, allocation: 20, spent: 200, color: "bg-success" },
-  ]);
+  const [tempAllowance, setTempAllowance] = useState("");
+  const { toast: toastHook } = useToast();
 
-  const handleSaveAllowance = () => {
+  useEffect(() => {
+    fetchBudget();
+  }, []);
+
+  const fetchBudget = async () => {
+    setLoading(true);
+    const response = await getBudget();
+    if (response.success && response.budget) {
+      setBudget(response.budget);
+      setTempAllowance(response.budget.totalAllowance.toString());
+    } else {
+      toastHook({
+        title: "Error",
+        description: response.message || "Failed to load budget",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
+  };
+
+  const handleSaveAllowance = async () => {
     const value = parseFloat(tempAllowance);
-    if (value > 0) {
-      setTotalAllowance(value);
-      setIsEditingAllowance(false);
-      toast.success("Allowance updated!");
+    if (value > 0 && budget) {
+      const response = await updateBudget({
+        totalAllowance: value,
+        needsAllocation: budget.needsAllocation,
+        wantsAllocation: budget.wantsAllocation,
+        savingsAllocation: budget.savingsAllocation,
+      });
+      
+      if (response.success && response.budget) {
+        setBudget(response.budget);
+        setIsEditingAllowance(false);
+        toast.success("Allowance updated!");
+      } else {
+        toast.error(response.message || "Failed to update allowance");
+      }
     }
   };
 
-  const handleAllocationChange = (id: string, value: number) => {
-    const updated = categories.map((cat) =>
-      cat.id === id ? { ...cat, allocation: value } : cat
-    );
+  const handleAllocationChange = async (id: string, value: number) => {
+    if (!budget) return;
+
+    const updated = {
+      needsAllocation: id === "needs" ? value : budget.needsAllocation,
+      wantsAllocation: id === "wants" ? value : budget.wantsAllocation,
+      savingsAllocation: id === "savings" ? value : budget.savingsAllocation,
+    };
     
-    const total = updated.reduce((sum, c) => sum + c.allocation, 0);
+    const total = updated.needsAllocation + updated.wantsAllocation + updated.savingsAllocation;
     if (total <= 100) {
-      setCategories(updated);
+      const response = await updateBudget({
+        totalAllowance: budget.totalAllowance,
+        ...updated,
+      });
+      
+      if (response.success && response.budget) {
+        setBudget(response.budget);
+      } else {
+        toast.error(response.message || "Failed to update allocation");
+      }
     } else {
       toast.error("Total allocation cannot exceed 100%");
     }
   };
 
+  if (loading) {
+    return (
+      <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+          <span className="text-muted-foreground">Loading budget...</span>
+        </div>
+      </UserLayout>
+    );
+  }
+
+  if (!budget) {
+    return (
+      <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Failed to load budget data</p>
+        </div>
+      </UserLayout>
+    );
+  }
+
+  const categories: BudgetCategory[] = [
+    { id: "needs", name: "Needs", icon: Wallet, allocation: budget.needsAllocation, spent: budget.needsSpent, color: "bg-blue-500" },
+    { id: "wants", name: "Wants", icon: ShoppingBag, allocation: budget.wantsAllocation, spent: budget.wantsSpent, color: "bg-pink-500" },
+    { id: "savings", name: "Savings", icon: PiggyBank, allocation: budget.savingsAllocation, spent: budget.savingsSpent, color: "bg-success" },
+  ];
+
   const totalAllocated = categories.reduce((sum, c) => sum + c.allocation, 0);
   const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
-  const remaining = totalAllowance - totalSpent;
+  const remaining = budget.totalAllowance - totalSpent;
 
   return (
     <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
@@ -86,7 +155,7 @@ const Budget = () => {
               autoFocus
             />
           ) : (
-            <p className="text-3xl font-bold">₱{totalAllowance.toLocaleString()}</p>
+            <p className="text-3xl font-bold">₱{budget.totalAllowance.toLocaleString()}</p>
           )}
           
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/20">
@@ -124,7 +193,7 @@ const Budget = () => {
           {/* Category Cards */}
           <div className="space-y-4">
             {categories.map((cat) => {
-              const budgetAmount = (totalAllowance * cat.allocation) / 100;
+              const budgetAmount = (budget.totalAllowance * cat.allocation) / 100;
               const spentPercent = Math.min((cat.spent / budgetAmount) * 100, 100);
               const isOverBudget = cat.spent > budgetAmount;
 

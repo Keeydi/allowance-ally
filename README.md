@@ -1,24 +1,32 @@
-# Welcome to your Lovable project
+# Allowance Ally
 
-## Project info
+A comprehensive financial management application for tracking allowances, expenses, budgets, and savings goals.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 🚀 Getting Started
 
-## How can I edit this code?
+**New to this project?** Start here:
 
-There are several ways of editing your application.
+- **[📖 Complete Tutorial](./TUTORIAL.md)** - Step-by-step setup guide with detailed instructions
+- **[⚡ Quick Start Guide](./QUICKSTART.md)** - Fast setup for experienced developers
 
-**Use Lovable**
+### Quick Overview
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+This project consists of:
+- **Frontend:** React + TypeScript + Vite (Port 8080)
+- **Backend:** Node.js + Express API (Port 3000)
+- **Database:** MySQL (Database: `allowance_ally`)
 
-Changes made via Lovable will be committed automatically to this repo.
+### Minimum Requirements
 
-**Use your preferred IDE**
+- Node.js 16+
+- MySQL Server 5.7+ (or MariaDB 10.2+)
+- npm or yarn
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## How to Edit This Code
+
+You can edit this code using your preferred IDE or code editor. The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
 Follow these steps:
 
@@ -36,38 +44,42 @@ npm i
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
 ## What technologies are used for this project?
 
-This project is built with:
+### Frontend
+- **Vite** - Build tool and dev server
+- **TypeScript** - Type-safe JavaScript
+- **React 18** - UI framework
+- **shadcn-ui** - Component library
+- **Tailwind CSS** - Styling
+- **React Router** - Navigation
+- **Recharts** - Data visualization
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Backend
+- **Node.js** - Runtime environment
+- **Express** - Web framework
+- **MySQL2** - Database driver
+- **JWT** - Authentication
+- **bcryptjs** - Password hashing
+- **CORS** - Cross-origin resource sharing
 
-## How can I deploy this project?
+### Database
+- **MySQL** - Relational database
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## How to Deploy This Project
 
-## Can I connect a custom domain to my Lovable project?
+You can deploy this project to any hosting platform that supports Node.js applications:
 
-Yes, you can!
+- **Vercel** - Great for frontend and serverless functions
+- **Netlify** - Easy deployment for static sites and serverless
+- **Railway** - Full-stack deployment with database support
+- **Heroku** - Traditional platform-as-a-service
+- **DigitalOcean** - VPS hosting with full control
+- **AWS/Azure/GCP** - Cloud platform options
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+For production deployment:
+1. Build the frontend: `npm run build`
+2. Set up environment variables for both frontend and backend
+3. Configure your database connection
+4. Deploy backend API to a Node.js hosting service
+5. Deploy frontend build to a static hosting service or CDN
