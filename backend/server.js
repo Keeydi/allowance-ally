@@ -109,6 +109,39 @@ const sendError = (res, status, message) => {
   return res.status(status).json({ success: false, message });
 };
 
+/**
+ * Recalculate and update budget spent amounts based on expenses
+ */
+const updateBudgetSpent = async (userId) => {
+  const [expenses] = await pool.execute(
+    `SELECT category, SUM(amount) as total 
+     FROM expenses 
+     WHERE user_id = ? 
+     GROUP BY category`,
+    [userId]
+  );
+
+  let needsSpent = 0;
+  let wantsSpent = 0;
+  let savingsSpent = 0;
+
+  expenses.forEach(exp => {
+    const cat = exp.category.toLowerCase();
+    if (cat === 'food' || cat === 'transportation' || cat === 'school') {
+      needsSpent += parseFloat(exp.total);
+    } else if (cat === 'wants' || cat === 'others') {
+      wantsSpent += parseFloat(exp.total);
+    } else if (cat === 'savings') {
+      savingsSpent += parseFloat(exp.total);
+    }
+  });
+
+  await pool.execute(
+    'UPDATE budgets SET needs_spent = ?, wants_spent = ?, savings_spent = ? WHERE user_id = ?',
+    [needsSpent, wantsSpent, savingsSpent, userId]
+  );
+};
+
 // ============================================================================
 // MIDDLEWARE
 // ============================================================================
@@ -473,6 +506,9 @@ app.post('/api/expenses', verifyToken, asyncHandler(async (req, res) => {
     [req.user.id, category, amount, date, note || '']
   );
 
+  // Update budget spent amounts
+  await updateBudgetSpent(req.user.id);
+
   const [newExpense] = await pool.execute(
     'SELECT id, category, amount, date, note FROM expenses WHERE id = ?',
     [result.insertId]
@@ -501,6 +537,9 @@ app.delete('/api/expenses/:id', verifyToken, asyncHandler(async (req, res) => {
     return sendError(res, 404, 'Expense not found');
   }
 
+  // Update budget spent amounts
+  await updateBudgetSpent(req.user.id);
+
   res.json({ success: true, message: 'Expense deleted successfully' });
 }));
 
@@ -516,8 +555,8 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
 
   if (budgets.length === 0) {
     await pool.execute(
-      'INSERT INTO budgets (user_id, total_allowance, needs_allocation, wants_allocation, savings_allocation) VALUES (?, 2500, 50, 30, 20)',
-      [req.user.id]
+      'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation) VALUES (?, 2500, ?, 50, 30, 20)',
+      [req.user.id, 'monthly']
     );
     
     const [newBudget] = await pool.execute(
@@ -529,6 +568,7 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
       success: true,
       budget: {
         totalAllowance: parseFloat(newBudget[0].total_allowance),
+        periodType: newBudget[0].period_type || 'monthly',
         needsAllocation: newBudget[0].needs_allocation,
         wantsAllocation: newBudget[0].wants_allocation,
         savingsAllocation: newBudget[0].savings_allocation,
@@ -544,6 +584,7 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
     success: true,
     budget: {
       totalAllowance: parseFloat(budget.total_allowance),
+      periodType: budget.period_type || 'monthly',
       needsAllocation: budget.needs_allocation,
       wantsAllocation: budget.wants_allocation,
       savingsAllocation: budget.savings_allocation,
@@ -555,12 +596,16 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
 }));
 
 app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
-  const { totalAllowance, needsAllocation, wantsAllocation, savingsAllocation } = req.body;
+  const { totalAllowance, periodType, needsAllocation, wantsAllocation, savingsAllocation } = req.body;
 
   if (totalAllowance === undefined || needsAllocation === undefined || 
       wantsAllocation === undefined || savingsAllocation === undefined) {
     return sendError(res, 400, 'All budget fields are required');
   }
+
+  // Validate periodType
+  const validPeriodTypes = ['daily', 'weekly', 'monthly'];
+  const period = validPeriodTypes.includes(periodType) ? periodType : 'monthly';
 
   const [existing] = await pool.execute(
     'SELECT id FROM budgets WHERE user_id = ?',
@@ -569,44 +614,18 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
 
   if (existing.length === 0) {
     await pool.execute(
-      'INSERT INTO budgets (user_id, total_allowance, needs_allocation, wants_allocation, savings_allocation) VALUES (?, ?, ?, ?, ?)',
-      [req.user.id, totalAllowance, needsAllocation, wantsAllocation, savingsAllocation]
+      'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.user.id, totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation]
     );
   } else {
     await pool.execute(
-      'UPDATE budgets SET total_allowance = ?, needs_allocation = ?, wants_allocation = ?, savings_allocation = ? WHERE user_id = ?',
-      [totalAllowance, needsAllocation, wantsAllocation, savingsAllocation, req.user.id]
+      'UPDATE budgets SET total_allowance = ?, period_type = ?, needs_allocation = ?, wants_allocation = ?, savings_allocation = ? WHERE user_id = ?',
+      [totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation, req.user.id]
     );
   }
 
   // Update spent amounts based on expenses
-  const [expenses] = await pool.execute(
-    `SELECT category, SUM(amount) as total 
-     FROM expenses 
-     WHERE user_id = ? 
-     GROUP BY category`,
-    [req.user.id]
-  );
-
-  let needsSpent = 0;
-  let wantsSpent = 0;
-  let savingsSpent = 0;
-
-  expenses.forEach(exp => {
-    const cat = exp.category.toLowerCase();
-    if (cat === 'food' || cat === 'transportation' || cat === 'school') {
-      needsSpent += parseFloat(exp.total);
-    } else if (cat === 'wants' || cat === 'others') {
-      wantsSpent += parseFloat(exp.total);
-    } else if (cat === 'savings') {
-      savingsSpent += parseFloat(exp.total);
-    }
-  });
-
-  await pool.execute(
-    'UPDATE budgets SET needs_spent = ?, wants_spent = ?, savings_spent = ? WHERE user_id = ?',
-    [needsSpent, wantsSpent, savingsSpent, req.user.id]
-  );
+  await updateBudgetSpent(req.user.id);
 
   const [updated] = await pool.execute(
     'SELECT * FROM budgets WHERE user_id = ?',
@@ -617,6 +636,7 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
     success: true,
     budget: {
       totalAllowance: parseFloat(updated[0].total_allowance),
+      periodType: updated[0].period_type || 'monthly',
       needsAllocation: updated[0].needs_allocation,
       wantsAllocation: updated[0].wants_allocation,
       savingsAllocation: updated[0].savings_allocation,

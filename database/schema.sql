@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS budgets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     total_allowance DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    period_type VARCHAR(20) NOT NULL DEFAULT 'monthly' COMMENT 'Budget period: daily, weekly, or monthly',
     needs_allocation INT NOT NULL DEFAULT 50,
     wants_allocation INT NOT NULL DEFAULT 30,
     savings_allocation INT NOT NULL DEFAULT 20,

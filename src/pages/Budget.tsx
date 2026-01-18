@@ -3,6 +3,13 @@ import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getBudget, updateBudget, Budget } from "@/lib/api/budget";
@@ -49,6 +56,7 @@ const Budget = () => {
     if (value > 0 && budget) {
       const response = await updateBudget({
         totalAllowance: value,
+        periodType: budget.periodType || 'monthly',
         needsAllocation: budget.needsAllocation,
         wantsAllocation: budget.wantsAllocation,
         savingsAllocation: budget.savingsAllocation,
@@ -61,6 +69,25 @@ const Budget = () => {
       } else {
         toast.error(response.message || "Failed to update allowance");
       }
+    }
+  };
+
+  const handlePeriodTypeChange = async (newPeriodType: 'daily' | 'weekly' | 'monthly') => {
+    if (!budget) return;
+
+    const response = await updateBudget({
+      totalAllowance: budget.totalAllowance,
+      periodType: newPeriodType,
+      needsAllocation: budget.needsAllocation,
+      wantsAllocation: budget.wantsAllocation,
+      savingsAllocation: budget.savingsAllocation,
+    });
+    
+    if (response.success && response.budget) {
+      setBudget(response.budget);
+      toast.success("Budget period updated!");
+    } else {
+      toast.error(response.message || "Failed to update budget period");
     }
   };
 
@@ -77,6 +104,7 @@ const Budget = () => {
     if (total <= 100) {
       const response = await updateBudget({
         totalAllowance: budget.totalAllowance,
+        periodType: budget.periodType || 'monthly',
         ...updated,
       });
       
@@ -128,7 +156,24 @@ const Budget = () => {
         {/* Allowance Card */}
         <div className="rounded-2xl bg-gradient-primary p-6 text-primary-foreground mb-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-primary-foreground/80 text-sm">Monthly Allowance</p>
+            <div className="flex items-center gap-3">
+              <p className="text-primary-foreground/80 text-sm">
+                {budget.periodType === 'daily' ? 'Daily' : budget.periodType === 'weekly' ? 'Weekly' : 'Monthly'} Allowance
+              </p>
+              <Select
+                value={budget.periodType || 'monthly'}
+                onValueChange={(value) => handlePeriodTypeChange(value as 'daily' | 'weekly' | 'monthly')}
+              >
+                <SelectTrigger className="w-28 h-7 bg-white/10 border-white/20 text-white text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {!isEditingAllowance ? (
               <button
                 onClick={() => setIsEditingAllowance(true)}

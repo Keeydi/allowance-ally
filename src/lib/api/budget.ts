@@ -2,6 +2,7 @@
 
 export interface Budget {
   totalAllowance: number;
+  periodType?: 'daily' | 'weekly' | 'monthly';
   needsAllocation: number;
   wantsAllocation: number;
   savingsAllocation: number;
@@ -48,6 +49,7 @@ export const getBudget = async (): Promise<BudgetResponse> => {
 
 export const updateBudget = async (budget: {
   totalAllowance: number;
+  periodType?: 'daily' | 'weekly' | 'monthly';
   needsAllocation: number;
   wantsAllocation: number;
   savingsAllocation: number;
