@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getDashboard, DashboardData } from "@/lib/api/dashboard";
 import { useToast } from "@/hooks/use-toast";
+import { getPhilippinesGreeting } from "@/lib/utils";
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -56,13 +57,15 @@ const Dashboard = () => {
     ? (dashboardData.savingsGoal.current / dashboardData.savingsGoal.target) * 100 
     : 0;
 
+  const greeting = getPhilippinesGreeting();
+
   return (
     <UserLayout title="Dashboard" subtitle="Your financial overview">
       <div className="max-w-6xl mx-auto">
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground md:text-3xl">
-            Good morning! 👋
+            {greeting}!
           </h1>
           <p className="text-muted-foreground mt-1">
             Here's your financial overview for this month.

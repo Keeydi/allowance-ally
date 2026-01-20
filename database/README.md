@@ -1,174 +1,108 @@
 # Database Setup Guide
 
-This guide explains how to set up the MySQL database for the Allowance Ally application.
+Complete guide for setting up the Allowance Ally MySQL database.
 
 ## Prerequisites
 
 - MySQL Server (version 5.7 or higher, or MariaDB 10.2+)
-- MySQL client or phpMyAdmin
+- MySQL client, HeidiSQL, phpMyAdmin, or MySQL Workbench
 
-## Setup Instructions
+## Quick Setup
 
-### 1. Create the Database
-
-```sql
-CREATE DATABASE IF NOT EXISTS allowance_ally;
-USE allowance_ally;
-```
-
-### 2. Run the Schema
-
-Execute the `schema.sql` file to create the tables:
+### Option 1: Command Line
 
 ```bash
-mysql -u your_username -p allowance_ally < database/schema.sql
+mysql -u root -p < database/setup.sql
 ```
 
-Or using MySQL client:
+### Option 2: PowerShell Script
+
+```powershell
+.\database\create-db.ps1
+```
+
+### Option 3: MySQL Client
+
 ```sql
-SOURCE database/schema.sql;
+SOURCE database/setup.sql;
 ```
 
-### 3. Verify the Setup
+### Option 4: GUI Tools (HeidiSQL, phpMyAdmin, MySQL Workbench)
 
-Check that the tables were created:
+1. Open your MySQL GUI tool
+2. Connect to your MySQL server
+3. Open `database/setup.sql` file
+4. Execute the entire script
 
-```sql
-SHOW TABLES;
-DESCRIBE users;
-DESCRIBE sessions;
-```
+## What `setup.sql` Does
 
-### 4. Default Users
+The `setup.sql` file is the **ONE and ONLY** SQL script you need. It includes:
 
-The schema includes two default users:
+- ✅ Database creation (`allowance_ally`)
+- ✅ All table schemas (users, sessions, video_tips, expenses, budgets, savings_goals)
+- ✅ All migrations (including `period_type` column)
+- ✅ Seed data (default users)
 
-**Admin User:**
-- Email: `admin@allowanceally.com`
-- Password: `admin123` (change this in production!)
-- Role: 1 (Admin)
+**Safe to run multiple times** - it handles existing databases gracefully.
 
-**Regular User:**
-- Email: `user@example.com`
-- Password: `user123` (change this in production!)
-- Role: 0 (User)
-
-⚠️ **IMPORTANT:** These are placeholder passwords. In production, you should:
-1. Use proper password hashing (bcrypt with cost 10+)
-2. Change all default passwords
-3. Use strong, unique passwords
+**Note:** If you get an error "Duplicate column name 'period_type'", that's OK! It means the column already exists. Just ignore it and continue.
 
 ## Database Structure
 
-### Users Table
+### Tables
 
-- `id`: Primary key (auto-increment)
-- `email`: Unique email address
-- `password`: Hashed password (use bcrypt in production)
-- `role`: 0 = Regular User, 1 = Admin
-- `first_name`: User's first name (optional)
-- `last_name`: User's last name (optional)
-- `created_at`: Account creation timestamp
-- `updated_at`: Last update timestamp
-- `last_login`: Last login timestamp
-- `is_active`: Account status (boolean)
+- **users** - User accounts and authentication
+- **sessions** - Token-based authentication sessions
+- **video_tips** - Educational video content
+- **expenses** - User expense records
+- **budgets** - User budget settings (includes `period_type` for daily/weekly/monthly)
+- **savings_goals** - User savings goals
 
-### Sessions Table (Optional)
+### Default Users
 
-For token-based authentication:
-- `id`: Session ID (primary key)
-- `user_id`: Foreign key to users table
-- `token`: Authentication token
-- `expires_at`: Token expiration timestamp
-- `created_at`: Session creation timestamp
+The script creates two placeholder users with placeholder password hashes:
 
-## Backend API Requirements
+**Admin User:**
+- Email: `admin@allowanceally.com`
+- Role: 1 (Admin)
+- Password: ⚠️ **Placeholder - needs to be set via backend**
 
-Your backend API should implement the following endpoints:
+**Regular User:**
+- Email: `user@example.com`
+- Role: 0 (User)
+- Password: ⚠️ **Placeholder - needs to be set via backend**
 
-### POST `/api/auth/login`
-Request:
-```json
-{
-  "email": "user@example.com",
-  "password": "user123"
-}
+## Creating Working Accounts
+
+### Recommended: Register via Frontend
+
+1. Start your frontend: `npm run dev`
+2. Go to `/login` page
+3. Click "Don't have an account? Sign up"
+4. Register with any email and password
+5. The backend automatically hashes passwords and creates accounts
+6. New accounts get role 0 (regular user) by default
+
+### Alternative: Update Default Accounts
+
+If you want to use the default accounts, generate a bcrypt hash and update:
+
+```javascript
+// In Node.js console or backend
+const bcrypt = require('bcryptjs');
+const hash = await bcrypt.hash('your_password', 10);
+console.log(hash);
 ```
 
-Response (Success):
-```json
-{
-  "success": true,
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "role": 0,
-    "first_name": "John",
-    "last_name": "Doe"
-  },
-  "token": "jwt_token_here"
-}
+Then update in database:
+```sql
+USE allowance_ally;
+UPDATE users 
+SET password = 'YOUR_BCRYPT_HASH_HERE' 
+WHERE email = 'admin@allowanceally.com';
 ```
 
-Response (Error):
-```json
-{
-  "success": false,
-  "message": "Invalid email or password"
-}
-```
-
-### POST `/api/auth/register`
-Request:
-```json
-{
-  "email": "newuser@example.com",
-  "password": "password123",
-  "first_name": "Jane",
-  "last_name": "Smith"
-}
-```
-
-Response (Success):
-```json
-{
-  "success": true,
-  "user": {
-    "id": 2,
-    "email": "newuser@example.com",
-    "role": 0,
-    "first_name": "Jane",
-    "last_name": "Smith"
-  },
-  "token": "jwt_token_here"
-}
-```
-
-### GET `/api/auth/verify`
-Headers:
-```
-Authorization: Bearer jwt_token_here
-```
-
-Response (Valid):
-```json
-{
-  "valid": true,
-  "user": { ... }
-}
-```
-
-## Security Best Practices
-
-1. **Password Hashing**: Always use bcrypt or Argon2 for password hashing
-2. **SQL Injection**: Use prepared statements/parameterized queries
-3. **Token Security**: Use JWT with proper expiration and refresh tokens
-4. **HTTPS**: Always use HTTPS in production
-5. **Rate Limiting**: Implement rate limiting on login endpoints
-6. **Input Validation**: Validate and sanitize all user inputs
-7. **CORS**: Configure CORS properly for your frontend domain
-
-## Environment Variables
+## Backend Configuration
 
 Set these in your backend `.env` file:
 
@@ -176,9 +110,70 @@ Set these in your backend `.env` file:
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=allowance_ally
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-JWT_SECRET=your_jwt_secret_key
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+JWT_SECRET=2788586556239fc3edf9bee4a806f67e
 JWT_EXPIRES_IN=7d
+PORT=3000
 ```
 
+## Verification
+
+After running `setup.sql`, verify the setup:
+
+```sql
+USE allowance_ally;
+
+-- Check tables
+SHOW TABLES;
+
+-- Check users
+SELECT id, email, role, first_name, last_name FROM users;
+
+-- Check budgets table structure
+DESCRIBE budgets;
+
+-- Verify period_type column exists
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_DEFAULT 
+FROM information_schema.COLUMNS 
+WHERE TABLE_SCHEMA = 'allowance_ally' 
+  AND TABLE_NAME = 'budgets' 
+  AND COLUMN_NAME = 'period_type';
+```
+
+## Troubleshooting
+
+### "mysql: command not found"
+- Add MySQL to your PATH, or use the full path to mysql.exe
+- Windows: `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`
+
+### "Access denied"
+- Check your MySQL root password
+- Make sure MySQL service is running
+
+### "Duplicate column name 'period_type'"
+- This is OK! The column already exists. Just ignore the error and continue.
+
+### "401 Unauthorized" on login
+- Default users have placeholder password hashes - they won't work
+- Register a new user via the frontend instead
+
+### "500 Internal Server Error" on `/api/budget`
+- Make sure the `period_type` column exists in the `budgets` table
+- Run `setup.sql` again (it's safe to run multiple times)
+
+## Security Best Practices
+
+1. **Password Hashing**: Always use bcrypt (the backend handles this automatically)
+2. **SQL Injection**: Backend uses prepared statements
+3. **Token Security**: JWT with proper expiration
+4. **HTTPS**: Always use HTTPS in production
+5. **Change Default Passwords**: Replace placeholder hashes in production
+
+## Files
+
+- **`setup.sql`** - The complete database setup script (run this!)
+- **`create-db.ps1`** - PowerShell helper script for Windows
+- **`README.md`** - This file
+
+All other SQL files and documentation have been consolidated into `setup.sql` and this README.

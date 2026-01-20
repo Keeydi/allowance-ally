@@ -1,5 +1,5 @@
 # Create MySQL Database for Allowance Ally
-# PowerShell script to create the database using schema.sql
+# PowerShell script to create the database using init.sql (consolidated schema)
 
 Write-Host "Creating Allowance Ally Database..." -ForegroundColor Cyan
 Write-Host ""
@@ -37,7 +37,7 @@ if (-not $mysqlPath) {
     Write-Host "2. Run this command manually with the full path to mysql.exe" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Example:" -ForegroundColor Cyan
-    Write-Host '  & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p < schema.sql' -ForegroundColor White
+    Write-Host '  & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p < setup.sql' -ForegroundColor White
     Write-Host ""
     $manualPath = Read-Host "Or enter the full path to mysql.exe (press Enter to skip)"
     if ($manualPath -and (Test-Path $manualPath)) {
@@ -60,10 +60,14 @@ $mysqlPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
 
 # Get current directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$schemaFile = Join-Path $scriptDir "schema.sql"
+# Try setup.sql first (final version), fall back to init.sql
+$schemaFile = Join-Path $scriptDir "setup.sql"
+if (-not (Test-Path $schemaFile)) {
+    $schemaFile = Join-Path $scriptDir "init.sql"
+}
 
 if (-not (Test-Path $schemaFile)) {
-    Write-Host "ERROR: schema.sql not found in $scriptDir" -ForegroundColor Red
+    Write-Host "ERROR: setup.sql or init.sql not found in $scriptDir" -ForegroundColor Red
     exit 1
 }
 
