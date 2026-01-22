@@ -147,7 +147,11 @@ const Budget = () => {
 
   const totalAllocated = categories.reduce((sum, c) => sum + c.allocation, 0);
   const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
-  const remaining = budget.totalAllowance - totalSpent;
+  
+  // For daily budgets, use availableBudget (includes carryover), otherwise use totalAllowance
+  const availableBudget = budget.availableBudget ?? budget.totalAllowance;
+  const carryoverAmount = budget.carryoverAmount ?? 0;
+  const remaining = availableBudget - totalSpent;
 
   return (
     <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
@@ -200,7 +204,14 @@ const Budget = () => {
               autoFocus
             />
           ) : (
-            <p className="text-3xl font-bold">₱{budget.totalAllowance.toLocaleString()}</p>
+            <div>
+              <p className="text-3xl font-bold">₱{availableBudget.toLocaleString()}</p>
+              {budget.periodType === 'daily' && carryoverAmount > 0 && (
+                <p className="text-sm text-primary-foreground/70 mt-1">
+                  Base: ₱{budget.totalAllowance.toLocaleString()} + Carryover: ₱{carryoverAmount.toLocaleString()}
+                </p>
+              )}
+            </div>
           )}
           
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/20">
@@ -238,7 +249,8 @@ const Budget = () => {
           {/* Category Cards */}
           <div className="space-y-4">
             {categories.map((cat) => {
-              const budgetAmount = (budget.totalAllowance * cat.allocation) / 100;
+              // Use availableBudget for daily budgets (includes carryover), otherwise use totalAllowance
+              const budgetAmount = (availableBudget * cat.allocation) / 100;
               const spentPercent = Math.min((cat.spent / budgetAmount) * 100, 100);
               const isOverBudget = cat.spent > budgetAmount;
 

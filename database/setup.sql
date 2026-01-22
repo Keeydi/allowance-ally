@@ -131,6 +131,21 @@ COMMENT 'Budget period: daily, weekly, or monthly';
 -- Update existing records to have 'monthly' as default (if any exist)
 UPDATE budgets SET period_type = 'monthly' WHERE period_type IS NULL OR period_type = '';
 
+-- Migration: Add carryover fields for daily budget rollover
+-- This allows leftover budget to carry over to the next day
+-- Note: If you get "Duplicate column name" errors, that's OK! The columns already exist.
+ALTER TABLE budgets 
+ADD COLUMN last_reset_date DATE NULL 
+COMMENT 'Last date when budget was reset (for daily/weekly/monthly periods)';
+
+ALTER TABLE budgets 
+ADD COLUMN carryover_amount DECIMAL(10, 2) NOT NULL DEFAULT 0 
+COMMENT 'Amount carried over from previous period (for daily budgets)';
+
+-- Update existing records to have default values
+UPDATE budgets SET last_reset_date = CURDATE() WHERE last_reset_date IS NULL;
+UPDATE budgets SET carryover_amount = 0 WHERE carryover_amount IS NULL;
+
 -- ============================================================================
 -- SEED DATA
 -- ============================================================================

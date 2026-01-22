@@ -110,15 +110,41 @@ const sendError = (res, status, message) => {
 };
 
 /**
- * Recalculate and update budget spent amounts based on expenses
+ * Recalculate and update budget spent amounts based on expenses for current period
  */
 const updateBudgetSpent = async (userId) => {
+  const [budgets] = await pool.execute(
+    'SELECT * FROM budgets WHERE user_id = ?',
+    [userId]
+  );
+
+  if (budgets.length === 0) return;
+
+  const budget = budgets[0];
+  const periodType = budget.period_type || 'monthly';
+  const today = formatDate(new Date());
+
+  // Determine the start date of the current period
+  let periodStartDate;
+  if (periodType === 'daily') {
+    periodStartDate = today;
+  } else if (periodType === 'weekly') {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    periodStartDate = formatDate(startOfWeek);
+  } else { // monthly
+    const now = new Date();
+    periodStartDate = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  }
+
+  // Get expenses for current period only
   const [expenses] = await pool.execute(
     `SELECT category, SUM(amount) as total 
      FROM expenses 
-     WHERE user_id = ? 
+     WHERE user_id = ? AND date >= ?
      GROUP BY category`,
-    [userId]
+    [userId, periodStartDate]
   );
 
   let needsSpent = 0;
@@ -140,6 +166,61 @@ const updateBudgetSpent = async (userId) => {
     'UPDATE budgets SET needs_spent = ?, wants_spent = ?, savings_spent = ? WHERE user_id = ?',
     [needsSpent, wantsSpent, savingsSpent, userId]
   );
+};
+
+/**
+ * Handle daily budget reset and carryover
+ * For daily budgets, leftover amount from previous day is added to today's budget
+ */
+const handleBudgetPeriodReset = async (userId) => {
+  const [budgets] = await pool.execute(
+    'SELECT * FROM budgets WHERE user_id = ?',
+    [userId]
+  );
+
+  if (budgets.length === 0) return;
+
+  const budget = budgets[0];
+  const periodType = budget.period_type || 'monthly';
+  const today = formatDate(new Date());
+  const lastResetDate = budget.last_reset_date ? formatDate(budget.last_reset_date) : null;
+  const currentCarryover = parseFloat(budget.carryover_amount || 0);
+
+  // Only handle reset for daily budgets
+  if (periodType === 'daily' && lastResetDate !== today) {
+    // Calculate leftover from previous day
+    // Available budget = base allowance + previous carryover
+    const totalSpent = parseFloat(budget.needs_spent || 0) + 
+                      parseFloat(budget.wants_spent || 0) + 
+                      parseFloat(budget.savings_spent || 0);
+    const totalAllowance = parseFloat(budget.total_allowance || 0);
+    const availableBudget = totalAllowance + currentCarryover;
+    const leftover = Math.max(0, availableBudget - totalSpent);
+    
+    // New carryover = leftover from last day (carryover is already included in availableBudget)
+    const newCarryover = leftover;
+
+    // Reset spent amounts for new day
+    await pool.execute(
+      `UPDATE budgets 
+       SET needs_spent = 0, 
+           wants_spent = 0, 
+           savings_spent = 0,
+           carryover_amount = ?,
+           last_reset_date = ?
+       WHERE user_id = ?`,
+      [newCarryover, today, userId]
+    );
+
+    // Recalculate spent amounts for today
+    await updateBudgetSpent(userId);
+  } else if (periodType !== 'daily' && lastResetDate !== today) {
+    // For weekly/monthly, just update the reset date (no carryover)
+    await pool.execute(
+      'UPDATE budgets SET last_reset_date = ? WHERE user_id = ?',
+      [today, userId]
+    );
+  }
 };
 
 // ============================================================================
@@ -548,15 +629,19 @@ app.delete('/api/expenses/:id', verifyToken, asyncHandler(async (req, res) => {
 // ============================================================================
 
 app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
+  // Handle period reset and carryover before fetching budget
+  await handleBudgetPeriodReset(req.user.id);
+
   const [budgets] = await pool.execute(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
 
   if (budgets.length === 0) {
+    const today = formatDate(new Date());
     await pool.execute(
-      'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation) VALUES (?, 2500, ?, 50, 30, 20)',
-      [req.user.id, 'monthly']
+      'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation, last_reset_date, carryover_amount) VALUES (?, 2500, ?, 50, 30, 20, ?, 0)',
+      [req.user.id, 'monthly', today]
     );
     
     const [newBudget] = await pool.execute(
@@ -572,14 +657,18 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
         needsAllocation: newBudget[0].needs_allocation,
         wantsAllocation: newBudget[0].wants_allocation,
         savingsAllocation: newBudget[0].savings_allocation,
-        needsSpent: parseFloat(newBudget[0].needs_spent),
-        wantsSpent: parseFloat(newBudget[0].wants_spent),
-        savingsSpent: parseFloat(newBudget[0].savings_spent)
+        needsSpent: parseFloat(newBudget[0].needs_spent || 0),
+        wantsSpent: parseFloat(newBudget[0].wants_spent || 0),
+        savingsSpent: parseFloat(newBudget[0].savings_spent || 0),
+        carryoverAmount: parseFloat(newBudget[0].carryover_amount || 0)
       }
     });
   }
 
   const budget = budgets[0];
+  const carryoverAmount = parseFloat(budget.carryover_amount || 0);
+  const availableBudget = parseFloat(budget.total_allowance) + carryoverAmount;
+  
   res.json({
     success: true,
     budget: {
@@ -588,9 +677,11 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
       needsAllocation: budget.needs_allocation,
       wantsAllocation: budget.wants_allocation,
       savingsAllocation: budget.savings_allocation,
-      needsSpent: parseFloat(budget.needs_spent),
-      wantsSpent: parseFloat(budget.wants_spent),
-      savingsSpent: parseFloat(budget.savings_spent)
+      needsSpent: parseFloat(budget.needs_spent || 0),
+      wantsSpent: parseFloat(budget.wants_spent || 0),
+      savingsSpent: parseFloat(budget.savings_spent || 0),
+      carryoverAmount: carryoverAmount,
+      availableBudget: availableBudget
     }
   });
 }));
@@ -606,25 +697,33 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
   // Validate periodType
   const validPeriodTypes = ['daily', 'weekly', 'monthly'];
   const period = validPeriodTypes.includes(periodType) ? periodType : 'monthly';
+  const today = formatDate(new Date());
 
   const [existing] = await pool.execute(
-    'SELECT id FROM budgets WHERE user_id = ?',
+    'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
 
   if (existing.length === 0) {
     await pool.execute(
-      'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation]
+      'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation, last_reset_date, carryover_amount) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+      [req.user.id, totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation, today]
     );
   } else {
+    // If changing period type, reset carryover
+    const oldPeriod = existing[0].period_type || 'monthly';
+    const carryoverAmount = (oldPeriod === 'daily' && period === 'daily') 
+      ? parseFloat(existing[0].carryover_amount || 0) 
+      : 0;
+    
     await pool.execute(
-      'UPDATE budgets SET total_allowance = ?, period_type = ?, needs_allocation = ?, wants_allocation = ?, savings_allocation = ? WHERE user_id = ?',
-      [totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation, req.user.id]
+      'UPDATE budgets SET total_allowance = ?, period_type = ?, needs_allocation = ?, wants_allocation = ?, savings_allocation = ?, carryover_amount = ?, last_reset_date = ? WHERE user_id = ?',
+      [totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation, carryoverAmount, today, req.user.id]
     );
   }
 
-  // Update spent amounts based on expenses
+  // Handle period reset and update spent amounts
+  await handleBudgetPeriodReset(req.user.id);
   await updateBudgetSpent(req.user.id);
 
   const [updated] = await pool.execute(
@@ -632,17 +731,23 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
     [req.user.id]
   );
 
+  const budget = updated[0];
+  const carryoverAmount = parseFloat(budget.carryover_amount || 0);
+  const availableBudget = parseFloat(budget.total_allowance) + carryoverAmount;
+
   res.json({
     success: true,
     budget: {
-      totalAllowance: parseFloat(updated[0].total_allowance),
-      periodType: updated[0].period_type || 'monthly',
-      needsAllocation: updated[0].needs_allocation,
-      wantsAllocation: updated[0].wants_allocation,
-      savingsAllocation: updated[0].savings_allocation,
-      needsSpent: parseFloat(updated[0].needs_spent),
-      wantsSpent: parseFloat(updated[0].wants_spent),
-      savingsSpent: parseFloat(updated[0].savings_spent)
+      totalAllowance: parseFloat(budget.total_allowance),
+      periodType: budget.period_type || 'monthly',
+      needsAllocation: budget.needs_allocation,
+      wantsAllocation: budget.wants_allocation,
+      savingsAllocation: budget.savings_allocation,
+      needsSpent: parseFloat(budget.needs_spent || 0),
+      wantsSpent: parseFloat(budget.wants_spent || 0),
+      savingsSpent: parseFloat(budget.savings_spent || 0),
+      carryoverAmount: carryoverAmount,
+      availableBudget: availableBudget
     }
   });
 }));

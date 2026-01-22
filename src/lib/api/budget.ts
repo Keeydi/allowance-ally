@@ -9,6 +9,8 @@ export interface Budget {
   needsSpent: number;
   wantsSpent: number;
   savingsSpent: number;
+  carryoverAmount?: number;
+  availableBudget?: number;
 }
 
 export interface BudgetResponse {
