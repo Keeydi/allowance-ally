@@ -1,5 +1,5 @@
 -- ============================================================================
--- Allowance Ally - Complete Database Setup Script (Final Version)
+-- Allowance Ally - Complete Database Setup Script (Optimized Version)
 -- ============================================================================
 -- This is the ONE and ONLY SQL script you need to run.
 -- It includes: Database creation, all tables, migrations, and seed data.
@@ -10,8 +10,16 @@
 --   MySQL Client: SOURCE database/setup.sql;
 --   GUI Tools: Open and execute this entire file
 --
--- IMPORTANT: If you get an error "Duplicate column name 'period_type'", 
--- that's OK! It means the column already exists. Just continue.
+-- CALCULATION FORMULAS:
+--   Category Budget = (total_allowance * category_allocation) / 100
+--   Available Budget = total_allowance + carryover_amount
+--   Remaining Budget = available_budget - (needs_spent + wants_spent + savings_spent)
+--   Budget Used % = (total_spent / total_allowance) * 100
+--
+-- DATA INTEGRITY CONSTRAINTS:
+--   - Allocations (needs + wants + savings) must sum to exactly 100%
+--   - All amounts must be non-negative
+--   - Expense amounts must be positive (> 0)
 -- ============================================================================
 
 -- Create database
@@ -69,11 +77,12 @@ CREATE TABLE IF NOT EXISTS video_tips (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Expenses table
+-- Amount must be positive (expenses are always positive values)
 CREATE TABLE IF NOT EXISTS expenses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     category VARCHAR(100) NOT NULL,
-    amount DECIMAL(10, 2) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL CHECK (amount > 0),
     date DATE NOT NULL,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -81,70 +90,135 @@ CREATE TABLE IF NOT EXISTS expenses (
     INDEX idx_user_id (user_id),
     INDEX idx_date (date),
     INDEX idx_category (category),
+    INDEX idx_user_date (user_id, date), -- Composite index for common query pattern
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Budget table (period_type column will be added in migrations section)
+-- Budget table
+-- Allocations are stored as percentages (0-100) and must sum to 100
+-- Spent amounts track actual spending per category for the current period
 CREATE TABLE IF NOT EXISTS budgets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    total_allowance DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    needs_allocation INT NOT NULL DEFAULT 50,
-    wants_allocation INT NOT NULL DEFAULT 30,
-    savings_allocation INT NOT NULL DEFAULT 20,
-    needs_spent DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    wants_spent DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    savings_spent DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    total_allowance DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (total_allowance >= 0),
+    needs_allocation INT NOT NULL DEFAULT 50 CHECK (needs_allocation >= 0 AND needs_allocation <= 100),
+    wants_allocation INT NOT NULL DEFAULT 30 CHECK (wants_allocation >= 0 AND wants_allocation <= 100),
+    savings_allocation INT NOT NULL DEFAULT 20 CHECK (savings_allocation >= 0 AND savings_allocation <= 100),
+    needs_spent DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (needs_spent >= 0),
+    wants_spent DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (wants_spent >= 0),
+    savings_spent DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (savings_spent >= 0),
+    period_type VARCHAR(20) NOT NULL DEFAULT 'monthly' COMMENT 'Budget period: daily, weekly, or monthly',
+    last_reset_date DATE NULL COMMENT 'Last date when budget was reset (for daily/weekly/monthly periods)',
+    carryover_amount DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (carryover_amount >= 0) COMMENT 'Amount carried over from previous period',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY unique_user_budget (user_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    -- Ensure allocations sum to exactly 100%
+    CONSTRAINT chk_allocations_sum CHECK (needs_allocation + wants_allocation + savings_allocation = 100),
+    INDEX idx_user_id (user_id),
+    INDEX idx_period_type (period_type),
+    INDEX idx_last_reset_date (last_reset_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Savings goals table
+-- Target and current amounts must be non-negative
+-- Current amount should not exceed target (enforced at application level for flexibility)
 CREATE TABLE IF NOT EXISTS savings_goals (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     name VARCHAR(255) NOT NULL,
-    target DECIMAL(10, 2) NOT NULL,
-    current DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    target DECIMAL(10, 2) NOT NULL CHECK (target > 0),
+    current DECIMAL(10, 2) NOT NULL DEFAULT 0 CHECK (current >= 0),
     target_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),
+    INDEX idx_target_date (target_date), -- For querying goals by deadline
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- MIGRATIONS (Safe to run multiple times)
+-- MIGRATIONS (Safe to run multiple times - handles existing databases)
 -- ============================================================================
--- These migrations handle adding columns that may not exist in older databases.
--- If you get an error "Duplicate column name 'period_type'", that's OK!
--- It means the column already exists - just ignore the error and continue.
+-- These migrations safely add columns that may not exist in older databases.
+-- Uses stored procedures to check for column existence before adding.
 
--- Migration: Add period_type column to budgets table
--- This handles existing databases that were created before period_type was added
-ALTER TABLE budgets 
-ADD COLUMN period_type VARCHAR(20) NOT NULL DEFAULT 'monthly' 
-COMMENT 'Budget period: daily, weekly, or monthly';
+DELIMITER $$
 
--- Update existing records to have 'monthly' as default (if any exist)
-UPDATE budgets SET period_type = 'monthly' WHERE period_type IS NULL OR period_type = '';
+-- Procedure to safely add column if it doesn't exist
+DROP PROCEDURE IF EXISTS AddColumnIfNotExists$$
+CREATE PROCEDURE AddColumnIfNotExists(
+    IN tableName VARCHAR(64),
+    IN columnName VARCHAR(64),
+    IN columnDefinition TEXT
+)
+BEGIN
+    DECLARE columnExists INT DEFAULT 0;
+    
+    SELECT COUNT(*) INTO columnExists
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = tableName
+      AND COLUMN_NAME = columnName;
+    
+    IF columnExists = 0 THEN
+        SET @sql = CONCAT('ALTER TABLE ', tableName, ' ADD COLUMN ', columnName, ' ', columnDefinition);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
 
--- Migration: Add carryover fields for daily budget rollover
--- This allows leftover budget to carry over to the next day
--- Note: If you get "Duplicate column name" errors, that's OK! The columns already exist.
-ALTER TABLE budgets 
-ADD COLUMN last_reset_date DATE NULL 
-COMMENT 'Last date when budget was reset (for daily/weekly/monthly periods)';
+-- Migration: Add period_type column to budgets table (if not exists)
+CALL AddColumnIfNotExists(
+    'budgets',
+    'period_type',
+    'VARCHAR(20) NOT NULL DEFAULT ''monthly'' COMMENT ''Budget period: daily, weekly, or monthly'''
+);
 
-ALTER TABLE budgets 
-ADD COLUMN carryover_amount DECIMAL(10, 2) NOT NULL DEFAULT 0 
-COMMENT 'Amount carried over from previous period (for daily budgets)';
+-- Migration: Add last_reset_date column (if not exists)
+CALL AddColumnIfNotExists(
+    'budgets',
+    'last_reset_date',
+    'DATE NULL COMMENT ''Last date when budget was reset (for daily/weekly/monthly periods)'''
+);
+
+-- Migration: Add carryover_amount column (if not exists)
+CALL AddColumnIfNotExists(
+    'budgets',
+    'carryover_amount',
+    'DECIMAL(10, 2) NOT NULL DEFAULT 0 COMMENT ''Amount carried over from previous period'''
+);
 
 -- Update existing records to have default values
+UPDATE budgets SET period_type = 'monthly' WHERE period_type IS NULL OR period_type = '';
 UPDATE budgets SET last_reset_date = CURDATE() WHERE last_reset_date IS NULL;
 UPDATE budgets SET carryover_amount = 0 WHERE carryover_amount IS NULL;
+
+-- Clean up procedure
+DROP PROCEDURE IF EXISTS AddColumnIfNotExists$$
+
+DELIMITER ;
+
+-- Add CHECK constraints if they don't exist (MySQL 8.0.16+)
+-- Note: For older MySQL versions, these constraints may need to be added manually
+-- or handled at the application level
+SET @constraint_exists = (
+    SELECT COUNT(*) 
+    FROM information_schema.TABLE_CONSTRAINTS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'budgets' 
+      AND CONSTRAINT_NAME = 'chk_allocations_sum'
+);
+
+SET @sql = IF(@constraint_exists = 0,
+    'ALTER TABLE budgets ADD CONSTRAINT chk_allocations_sum CHECK (needs_allocation + wants_allocation + savings_allocation = 100)',
+    'SELECT ''Constraint chk_allocations_sum already exists'' AS message'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ============================================================================
 -- SEED DATA
@@ -166,7 +240,10 @@ UPDATE budgets SET carryover_amount = 0 WHERE carryover_amount IS NULL;
 INSERT INTO users (email, password, role, first_name, last_name) 
 VALUES ('admin@allowanceally.com', '$2a$10$PLACEHOLDER_ADMIN_PASSWORD_HASH_HERE', 1, 'Admin', 'User')
 ON DUPLICATE KEY UPDATE 
-  email = email,
+  password = VALUES(password),
+  role = VALUES(role),
+  first_name = VALUES(first_name),
+  last_name = VALUES(last_name),
   updated_at = NOW();
 
 -- Default regular user
@@ -175,7 +252,10 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO users (email, password, role, first_name, last_name) 
 VALUES ('user@example.com', '$2a$10$PLACEHOLDER_USER_PASSWORD_HASH_HERE', 0, 'John', 'Doe')
 ON DUPLICATE KEY UPDATE 
-  email = email,
+  password = VALUES(password),
+  role = VALUES(role),
+  first_name = VALUES(first_name),
+  last_name = VALUES(last_name),
   updated_at = NOW();
 
 -- ============================================================================
