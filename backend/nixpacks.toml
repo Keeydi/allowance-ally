@@ -1,10 +1,6 @@
-# Force npm for backend (avoid bun from repo root)
+# Force npm for backend (repo root has no bun.lockb; this backs up packageManager in package.json)
 [phases.setup]
 nixPkgs = ["nodejs_20"]
-cmds = ["npm ci"]
 
 [phases.install]
-cmds = []
-
-[variables]
-NIXPACKS_NO_BUN = "1"
+cmds = ["npm ci"]
