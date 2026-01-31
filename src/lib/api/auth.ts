@@ -108,6 +108,17 @@ export const login = async (email: string, password: string): Promise<LoginRespo
   }
 };
 
+/** Map Supabase signup errors to user-friendly messages */
+function getSignUpErrorMessage(error: { message?: string; status?: number }): string {
+  const msg = error.message || '';
+  if (error.status === 422) {
+    if (/already registered|already exists/i.test(msg)) return 'Email already registered. Try signing in.';
+    if (/invalid format|invalid email/i.test(msg)) return 'Please enter a valid email address.';
+    if (/password|minimum length/i.test(msg)) return 'Password must be at least 6 characters.';
+  }
+  return msg || 'Registration failed. Please try again.';
+}
+
 /**
  * Register with Supabase Auth (with optional first/last name in user_metadata), then sign in and sync to backend
  */
@@ -118,23 +129,20 @@ export const register = async (
   lastName?: string
 ): Promise<RegisterResponse> => {
   try {
+    const userMetadata: Record<string, string> = {};
+    if (firstName?.trim()) userMetadata.first_name = firstName.trim();
+    if (lastName?.trim()) userMetadata.last_name = lastName.trim();
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
+      email: email.trim(),
       password,
-      options: {
-        data: {
-          first_name: firstName ?? '',
-          last_name: lastName ?? '',
-        },
-      },
+      options: Object.keys(userMetadata).length > 0 ? { data: userMetadata } : undefined,
     });
 
     if (signUpError) {
       return {
         success: false,
-        message: signUpError.message === 'User already registered'
-          ? 'Email already registered. Try signing in.'
-          : signUpError.message,
+        message: getSignUpErrorMessage(signUpError),
       };
     }
 
