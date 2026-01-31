@@ -157,9 +157,12 @@ export const register = async (
       return { success: true, user };
     } catch (err) {
       if (isNetworkError(err)) {
+        const isLocal = /localhost|127\.0\.0\.1/.test(API_BASE_URL);
         return {
           success: true,
-          message: 'Account created! Start the backend (cd backend && npm start), then sign in.',
+          message: isLocal
+            ? 'Account created! Start the backend (cd backend && npm start), then sign in.'
+            : 'Account created! The server could not be reached. Try signing in in a moment.',
         };
       }
       throw err;

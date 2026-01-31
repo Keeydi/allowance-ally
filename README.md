@@ -8,7 +8,7 @@ A comprehensive financial management application for tracking allowances, expens
 
 - **[📖 Complete Tutorial](./TUTORIAL.md)** - Step-by-step setup guide with detailed instructions
 - **[⚡ Quick Start Guide](./QUICKSTART.md)** - Fast setup for experienced developers
-- **[🚀 Deploy via GitHub](./DEPLOYMENT.md)** - Deploy frontend (GitHub Pages) and backend (Railway, Fly.io, or Render)
+- **[🚀 Deploy via GitHub](./DEPLOYMENT.md)** - Vercel (frontend) + Railway (backend), or GitHub Pages / Fly / Render
 
 ### Quick Overview
 

@@ -34,7 +34,7 @@ jobs:
         run: |
           export VITE_BASE="/${{ github.event.repository.name }}/"
           export VITE_API_URL="${{ secrets.VITE_API_URL }}"
-          [ -z "$VITE_API_URL" ] && export VITE_API_URL="https://allowance-ally-api.fly.dev/api"
+          [ -z "$VITE_API_URL" ] && export VITE_API_URL="https://allowance-ally-production.up.railway.app/api"
           export VITE_SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}"
           export VITE_SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}"
           npm run build

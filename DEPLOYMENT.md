@@ -1,12 +1,44 @@
 # Deploy Frontend & Backend via GitHub
 
-You can deploy in three ways: **GitHub Pages + Railway** (easiest), **GitHub Pages + Fly.io** (via Actions), or **Vercel + Render**.
+**Current setup:** **Vercel** (frontend) + **Railway** (backend). Other options below.
 
 ---
 
-## Option A: GitHub Pages (frontend) + Railway (backend) — recommended
+## Vercel (frontend) + Railway (backend) — current setup
 
-No GitHub Actions needed for the backend. Connect the repo to **Railway**; it auto-deploys on push. Frontend still deploys to **GitHub Pages** via the existing workflow.
+Frontend runs on **Vercel**; backend runs on **Railway** at `https://allowance-ally-production.up.railway.app`.
+
+### 1. Vercel — frontend (already running)
+
+Your frontend is on Vercel. Ensure these **Environment Variables** are set so the app talks to the backend:
+
+1. Open [vercel.com](https://vercel.com) → your project → **Settings** → **Environment Variables**.
+2. Add or update (for **Production**, and optionally Preview/Development):
+
+| Name | Value |
+|------|--------|
+| `VITE_API_URL` | `https://allowance-ally-production.up.railway.app/api` |
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
+
+3. **Redeploy** so the new values are used: **Deployments** → … on latest deploy → **Redeploy**.
+
+Build is already set by `vercel.json`: `npm run build`, output `dist`, SPA rewrites.
+
+### 2. Railway — backend
+
+Backend is at **allowance-ally-production.up.railway.app**. In Railway:
+
+- **Settings** → **Networking** → generated domain = that URL.
+- **Variables**: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
+
+Push to `main` → Railway auto-deploys the backend; Vercel auto-deploys the frontend.
+
+---
+
+## Option A: GitHub Pages (frontend) + Railway (backend)
+
+No GitHub Actions needed for the backend. Connect the repo to **Railway**; frontend deploys to **GitHub Pages** via the workflow.
 
 ### 1. Enable GitHub Pages
 
@@ -18,30 +50,12 @@ Repo → **Settings → Pages** → **Source: GitHub Actions**.
 2. **New Project** → **Deploy from GitHub repo** → select this repo.
 3. Railway creates a service. Open it → **Settings**:
    - **Root Directory:** set to `backend`.
-   - **Build Command:** (optional) leave default or `npm install` (already in `backend/railway.json`).
-   - **Start Command:** (optional) leave default or `npm start`.
-4. **Variables** tab: add:
-   - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (your MySQL)
-   - `JWT_SECRET`
-   - `SUPABASE_JWT_SECRET`
-5. **Deploy** (or push to `main` to trigger a deploy). After deploy, open **Settings → Networking → Generate domain** and copy the URL (e.g. `https://allowance-ally-api-production-xxxx.up.railway.app`).
+4. **Variables** tab: add `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
+5. **Settings → Networking** → **Generate domain** (e.g. `https://allowance-ally-production.up.railway.app`).
 
-### 3. Add GitHub repo secrets (for frontend build)
+### 3. Add GitHub repo secrets (for Pages build)
 
-Repo → **Settings → Secrets and variables → Actions** → **New repository secret**. Add:
-
-| Secret | Value |
-|--------|--------|
-| `VITE_API_URL` | Your Railway backend URL + `/api` (e.g. `https://allowance-ally-api-production-xxxx.up.railway.app/api`) |
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
-
-### 4. Deploy
-
-- **Backend:** Push to `main` → Railway auto-deploys (when repo is connected).
-- **Frontend:** Push to `main` → **Deploy Frontend to GitHub Pages** workflow runs. Site: `https://<username>.github.io/<repo-name>/`.
-
-**Database:** Use a hosted MySQL (e.g. [PlanetScale](https://planetscale.com), [Railway MySQL](https://railway.app/templates/mysql), or your own) and set the `DB_*` variables in Railway.
+Repo → **Settings → Secrets and variables → Actions**. Add `VITE_API_URL` = `https://allowance-ally-production.up.railway.app/api`, plus `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
 ---
 
@@ -107,27 +121,17 @@ The backend expects **MySQL**. Use a hosted MySQL (e.g. [PlanetScale](https://pl
 
 ## Option C: Vercel (frontend) + Render (backend)
 
----
-
-## 1. Frontend → Vercel
-
-1. Go to [vercel.com](https://vercel.com) and sign in with **GitHub**.
-2. Click **Add New… → Project**, import this repo.
-3. **Root Directory:** leave as `.` (repo root).
-4. **Build:** already set by `vercel.json`:
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-5. **Environment variables** (Settings → Environment Variables), add:
-   - `VITE_API_URL` = your backend API URL (e.g. `https://allowance-ally-api.onrender.com/api` **after** backend is deployed)
-   - `VITE_SUPABASE_URL` = your Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
-6. Deploy. Vercel will build and host the frontend and give you a URL (e.g. `https://allowance-ally.vercel.app`).
-
-**Important:** Set `VITE_API_URL` to your **backend** URL so the app calls the right API in production.
+Use **Render** instead of Railway for the backend. Vercel setup is the same; set `VITE_API_URL` to your Render backend URL + `/api`.
 
 ---
 
-## 2. Backend → Render (recommended)
+### Vercel (frontend)
+
+1. [vercel.com](https://vercel.com) → **Add New… → Project** → import this repo.
+2. **Root Directory:** `.` (repo root). Build/Output come from `vercel.json`.
+3. **Environment Variables:** `VITE_API_URL` (backend URL + `/api`), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+
+### Backend → Render
 
 1. Go to [render.com](https://render.com) and sign in with **GitHub**.
 2. **New → Web Service**, connect this repo.
@@ -148,35 +152,26 @@ The backend expects **MySQL**. Use a hosted MySQL (e.g. [PlanetScale](https://pl
 
 ---
 
-## 3. Wire frontend to backend
-
-1. After the backend is deployed, copy its URL (e.g. `https://allowance-ally-api.onrender.com`).
-2. In **Vercel** (frontend project) → Settings → Environment Variables, set:
-   - `VITE_API_URL` = `https://allowance-ally-api.onrender.com/api`
-3. Redeploy the frontend (Deployments → … → Redeploy) so the new env is used.
-
 ---
 
-## 4. GitHub Actions in this repo
+## GitHub Actions in this repo
 
 | Workflow | What it does |
 |----------|----------------|
 | **CI** | On push/PR: builds frontend and installs backend deps (no deploy). |
-| **Deploy Frontend to GitHub Pages** | On push to `main`: builds and deploys frontend to GitHub Pages (Options A & B). |
+| **Deploy Frontend to GitHub Pages** | On push to `main`: deploys frontend to GitHub Pages (if you use that). |
 | **Deploy Backend to Fly.io** | On push to `main` (backend changes): deploys backend to Fly.io (Option B only). |
 
-- **Option A (Railway):** Only the Pages workflow is needed; Railway deploys the backend when you connect the repo.
-- **Option B (Fly):** Both workflows run; Fly deploy is triggered by backend changes.
-- **Option C:** Connect repo to Vercel and Render; no GitHub deploy workflows needed.
+With **Vercel + Railway**, Vercel and Railway deploy on push; no GitHub deploy workflows needed for frontend/backend.
 
 ---
 
 ## Summary
 
-| Part      | Option A (Railway)     | Option B (Fly)          | Option C        |
-|----------|------------------------|-------------------------|-----------------|
-| Frontend | GitHub Pages (Actions) | GitHub Pages (Actions)  | Vercel          |
-| Backend  | Railway (connect repo) | Fly.io (Actions)        | Render          |
+| Part      | Current (Vercel + Railway) | Option A        | Option B        | Option C        |
+|----------|-----------------------------|-----------------|-----------------|-----------------|
+| Frontend | **Vercel**                  | GitHub Pages    | GitHub Pages    | Vercel          |
+| Backend  | **Railway**                 | Railway         | Fly.io          | Render          |
 
 ---
 
