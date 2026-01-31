@@ -61,12 +61,12 @@ The script will: install Fly CLI if needed, open Fly login in your browser, and 
 
 ---
 
-### 1. Enable GitHub Pages
+### 1. Enable GitHub Pages (for Fly backend)
 
 1. In your repo: **Settings → Pages**.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 
-### 2. One-time: Create the Fly.io app (backend)
+### 2. One-time: Create the Fly.io app (backend) — Fly option
 
 1. Install [Fly CLI](https://fly.io/docs/hubcli/install/): `winget install flyctl` (Windows) or see [fly.io/docs](https://fly.io/docs/hubcli/install/).
 2. Sign in: `fly auth login`.
@@ -105,7 +105,7 @@ The backend expects **MySQL**. Use a hosted MySQL (e.g. [PlanetScale](https://pl
 
 ---
 
-## Option B: Vercel (frontend) + Render (backend)
+## Option C: Vercel (frontend) + Render (backend)
 
 ---
 
@@ -162,19 +162,21 @@ The backend expects **MySQL**. Use a hosted MySQL (e.g. [PlanetScale](https://pl
 | Workflow | What it does |
 |----------|----------------|
 | **CI** | On push/PR: builds frontend and installs backend deps (no deploy). |
-| **Deploy Frontend to GitHub Pages** | On push to `main`: builds and deploys frontend to GitHub Pages (Option A). |
-| **Deploy Backend to Fly.io** | On push to `main` (backend changes): deploys backend to Fly.io (Option A). |
+| **Deploy Frontend to GitHub Pages** | On push to `main`: builds and deploys frontend to GitHub Pages (Options A & B). |
+| **Deploy Backend to Fly.io** | On push to `main` (backend changes): deploys backend to Fly.io (Option B only). |
 
-For **Option A**, all deployment is via these workflows; no Vercel/Render dashboard needed. For **Option B**, you connect the repo to Vercel and Render; they deploy on push.
+- **Option A (Railway):** Only the Pages workflow is needed; Railway deploys the backend when you connect the repo.
+- **Option B (Fly):** Both workflows run; Fly deploy is triggered by backend changes.
+- **Option C:** Connect repo to Vercel and Render; no GitHub deploy workflows needed.
 
 ---
 
 ## Summary
 
-| Part      | Option A (GitHub only) | Option B |
-|----------|------------------------|----------|
-| Frontend | GitHub Pages (Actions) | Vercel   |
-| Backend  | Fly.io (Actions)       | Render   |
+| Part      | Option A (Railway)     | Option B (Fly)          | Option C        |
+|----------|------------------------|-------------------------|-----------------|
+| Frontend | GitHub Pages (Actions) | GitHub Pages (Actions)  | Vercel          |
+| Backend  | Railway (connect repo) | Fly.io (Actions)        | Render          |
 
 ---
 

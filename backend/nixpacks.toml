@@ -1,0 +1,10 @@
+# Force npm for backend (avoid bun from repo root)
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+cmds = ["npm ci"]
+
+[phases.install]
+cmds = []
+
+[variables]
+NIXPACKS_NO_BUN = "1"

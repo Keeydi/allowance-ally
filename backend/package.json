@@ -4,6 +4,7 @@
   "description": "Backend API for Allowance Ally",
   "main": "server.js",
   "type": "commonjs",
+  "packageManager": "npm@10",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
