@@ -12,16 +12,19 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS: allow Vercel frontend and local dev; required for browser preflight from allowance-ally.vercel.app
+// CORS: allow Vercel frontend and local dev; required for preflight from allowance-ally.vercel.app
 const allowedOrigins = [
   'https://allowance-ally.vercel.app',
   'https://www.allowance-ally.vercel.app',
-  /^https:\/\/allowance-ally.*\.vercel\.app$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/,  // *.vercel.app (preview deployments)
   'http://localhost:5173',
   'http://localhost:8080',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:8080'
 ];
+if (process.env.CORS_ORIGIN) {
+  allowedOrigins.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()));
+}
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
@@ -30,8 +33,9 @@ app.use(cors({
     );
     cb(null, allowed ? origin : false);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  optionsSuccessStatus: 204,
 }));
 
 app.use(express.json());
