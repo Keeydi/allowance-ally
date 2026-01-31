@@ -29,6 +29,7 @@ const pool = mysql.createPool({
 // JWT Configuration
 const JWT_SECRET = process.env.JWT_SECRET || '2788586556239fc3edf9bee4a806f67e';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
 
 // Test database connection
 pool.getConnection()
@@ -224,38 +225,96 @@ const handleBudgetPeriodReset = async (userId) => {
 };
 
 // ============================================================================
+// SUPABASE HELPERS
+// ============================================================================
+
+/**
+ * Verify Supabase JWT and return payload (sub, email, user_metadata) or null
+ */
+const verifySupabaseToken = (token) => {
+  if (!SUPABASE_JWT_SECRET) return null;
+  try {
+    const decoded = jwt.verify(token, SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
+    return {
+      sub: decoded.sub,
+      email: decoded.email || '',
+      user_metadata: decoded.user_metadata || {}
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Find or create MySQL user from Supabase JWT payload; returns user row or null
+ */
+const findOrCreateUserFromSupabase = async (payload) => {
+  const { sub, email, user_metadata } = payload;
+  const firstName = user_metadata.first_name || null;
+  const lastName = user_metadata.last_name || null;
+
+  const [existing] = await pool.execute(
+    'SELECT id, email, role, first_name, last_name FROM users WHERE supabase_id = ? AND is_active = TRUE',
+    [sub]
+  );
+
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  const [insertResult] = await pool.execute(
+    'INSERT INTO users (supabase_id, email, password, role, first_name, last_name) VALUES (?, ?, NULL, 0, ?, ?)',
+    [sub, email, firstName, lastName]
+  );
+
+  const [newUser] = await pool.execute(
+    'SELECT id, email, role, first_name, last_name FROM users WHERE id = ?',
+    [insertResult.insertId]
+  );
+  return newUser[0] || null;
+};
+
+// ============================================================================
 // MIDDLEWARE
 // ============================================================================
 
 /**
- * Verify JWT token and attach user to request
+ * Verify JWT token (our JWT or Supabase JWT) and attach user to request
  */
 const verifyToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return sendError(res, 401, 'No token provided');
     }
 
     const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
-    const [users] = await pool.execute(
-      'SELECT id, role FROM users WHERE id = ? AND is_active = TRUE',
-      [decoded.id]
-    );
-    
-    if (users.length === 0) {
-      return sendError(res, 401, 'User not found');
+
+    // Try our own JWT first
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const [users] = await pool.execute(
+        'SELECT id, role FROM users WHERE id = ? AND is_active = TRUE',
+        [decoded.id]
+      );
+      if (users.length > 0) {
+        req.user = users[0];
+        return next();
+      }
+    } catch (_) {}
+
+    // Try Supabase JWT
+    const supabasePayload = verifySupabaseToken(token);
+    if (supabasePayload) {
+      const user = await findOrCreateUserFromSupabase(supabasePayload);
+      if (user) {
+        req.user = { id: user.id, role: user.role };
+        return next();
+      }
     }
 
-    req.user = users[0];
-    next();
+    return sendError(res, 401, 'Invalid or expired token');
   } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return sendError(res, 401, 'Invalid or expired token');
-    }
     console.error('Token verification error:', error);
     return sendError(res, 500, 'Internal server error');
   }
@@ -370,24 +429,68 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
 
 app.get('/api/auth/verify', asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
-  
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ valid: false, message: 'No token provided' });
   }
-
   const token = authHeader.substring(7);
-  const decoded = jwt.verify(token, JWT_SECRET);
 
-  const [users] = await pool.execute(
-    'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
-    [decoded.id]
-  );
+  // Try our JWT
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const [users] = await pool.execute(
+      'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
+      [decoded.id]
+    );
+    if (users.length > 0) {
+      return res.json({ valid: true, user: users[0] });
+    }
+  } catch (_) {}
 
-  if (users.length === 0) {
-    return res.status(401).json({ valid: false, message: 'User not found' });
+  // Try Supabase JWT
+  const supabasePayload = verifySupabaseToken(token);
+  if (supabasePayload) {
+    const user = await findOrCreateUserFromSupabase(supabasePayload);
+    if (user) {
+      return res.json({ valid: true, user });
+    }
   }
 
-  res.json({ valid: true, user: users[0] });
+  return res.status(401).json({ valid: false, message: 'Invalid or expired token' });
+}));
+
+/**
+ * GET /api/auth/me - Return current app user (used after Supabase login to sync to MySQL)
+ * Accepts Bearer token (Supabase access_token or our JWT). Creates MySQL user on first Supabase login.
+ */
+app.get('/api/auth/me', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+  const token = authHeader.substring(7);
+
+  // Try our JWT
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const [users] = await pool.execute(
+      'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
+      [decoded.id]
+    );
+    if (users.length > 0) {
+      return res.json({ user: users[0] });
+    }
+  } catch (_) {}
+
+  // Try Supabase JWT and find or create user
+  const supabasePayload = verifySupabaseToken(token);
+  if (!supabasePayload) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+  const user = await findOrCreateUserFromSupabase(supabasePayload);
+  if (!user) {
+    return res.status(500).json({ message: 'Failed to sync user' });
+  }
+  res.json({ user });
 }));
 
 // ============================================================================

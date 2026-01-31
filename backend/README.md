@@ -22,6 +22,9 @@ DB_PASSWORD=your_mysql_password
 JWT_SECRET=2788586556239fc3edf9bee4a806f67e
 JWT_EXPIRES_IN=7d
 PORT=3000
+
+# Supabase (login/signup) - get from Supabase Dashboard > Settings > API > JWT Secret
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret
 ```
 
 ### 3. Start the Server
@@ -37,10 +40,24 @@ node server.js
 
 The server will start on `http://localhost:3000`
 
+## Supabase Login/Signup
+
+If you use **Supabase** for auth:
+
+1. Run the MySQL migration so the backend can link Supabase users to app users:
+   ```bash
+   mysql -u root -p allowance_ally < database/migration-supabase.sql
+   ```
+2. In backend `.env`, set **SUPABASE_JWT_SECRET** from Supabase Dashboard → **Settings** → **API** → **JWT Secret** (used to verify Supabase access tokens).
+3. In project root `.env` (frontend), set **VITE_SUPABASE_URL** and **VITE_SUPABASE_ANON_KEY** from the same API settings.
+
+Login and signup then go through Supabase; the backend creates a matching MySQL user on first request and uses it for budgets/expenses.
+
 ## API Endpoints
 
-- **POST** `/api/auth/login` - User login
-- **POST** `/api/auth/register` - User registration
+- **POST** `/api/auth/login` - User login (legacy; frontend uses Supabase)
+- **POST** `/api/auth/register` - User registration (legacy; frontend uses Supabase)
+- **GET** `/api/auth/me` - Current user (syncs Supabase user to MySQL)
 - **GET** `/api/auth/verify` - Verify JWT token
 - **GET** `/api/health` - Health check
 
@@ -65,8 +82,10 @@ curl -X POST http://localhost:3000/api/auth/login \
 
 ## Frontend Configuration
 
-Make sure your frontend `.env` file has:
+In the project root (frontend) `.env`:
 ```env
 VITE_API_URL=http://localhost:3000/api
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 

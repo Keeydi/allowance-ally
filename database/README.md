@@ -170,10 +170,19 @@ WHERE TABLE_SCHEMA = 'allowance_ally'
 4. **HTTPS**: Always use HTTPS in production
 5. **Change Default Passwords**: Replace placeholder hashes in production
 
+## Supabase (PostgreSQL)
+
+If you run SQL in **Supabase** (Dashboard → SQL Editor), use **`setup-supabase.sql`**, not `setup.sql`.
+
+- **`setup.sql`** is for **MySQL** (syntax like `CREATE DATABASE IF NOT EXISTS`, `AUTO_INCREMENT`, `USE`). It will fail in Supabase with errors like `syntax error at or near "NOT"`.
+- **`setup-supabase.sql`** is for **PostgreSQL/Supabase** (SERIAL, ON CONFLICT, no CREATE DATABASE). Paste it into the Supabase SQL Editor and run it.
+
+The Node backend (`backend/server.js`) currently connects to **MySQL**. To use Supabase as the app database you would need to switch the backend to PostgreSQL (e.g. `pg` and the Supabase connection string).
+
 ## Files
 
-- **`setup.sql`** - The complete database setup script (run this!)
+- **`setup.sql`** - MySQL setup (run on MySQL only)
+- **`setup-supabase.sql`** - PostgreSQL/Supabase setup (run in Supabase SQL Editor)
+- **`migration-supabase.sql`** - MySQL migration to add `supabase_id` (when using Supabase Auth + MySQL backend)
 - **`create-db.ps1`** - PowerShell helper script for Windows
 - **`README.md`** - This file
-
-All other SQL files and documentation have been consolidated into `setup.sql` and this README.

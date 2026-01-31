@@ -1,0 +1,20 @@
+# Render Blueprint: deploy backend from this repo
+# https://render.com/docs/blueprint-spec
+# Connect this GitHub repo in Render; Render will use this spec.
+
+services:
+  - type: web
+    name: allowance-ally-api
+    runtime: node
+    rootDir: backend
+
+    buildCommand: npm install
+    startCommand: npm start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Add these in Render Dashboard > Environment (secrets):
+      # DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+      # JWT_SECRET, SUPABASE_JWT_SECRET
+      # (Optional) PORT is set by Render

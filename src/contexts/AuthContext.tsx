@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, login as apiLogin, register as apiRegister, logout as apiLogout, getCurrentUser, isAuthenticated } from '@/lib/api/auth';
+import { User, login as apiLogin, register as apiRegister, logout as apiLogout, getCurrentUser, getAuthToken, refreshSession } from '@/lib/api/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -18,12 +18,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Load user from localStorage on mount
+  // Load user: try Supabase session first (sync to backend), then fallback to localStorage
   useEffect(() => {
-    const loadUser = () => {
-      const currentUser = getCurrentUser();
-      if (currentUser && isAuthenticated()) {
-        setUser(currentUser);
+    const loadUser = async () => {
+      const synced = await refreshSession();
+      if (synced) {
+        setUser(synced);
+      } else {
+        const currentUser = getCurrentUser();
+        if (currentUser && getAuthToken()) {
+          setUser(currentUser);
+        }
       }
       setLoading(false);
     };
@@ -64,14 +69,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await apiRegister(email, password, firstName, lastName);
       
-      if (response.success && response.user) {
-        setUser(response.user);
-        
-        // New users are always regular users (role 0)
-        // Redirect to user dashboard
-        navigate('/dashboard');
-        
-        return { success: true };
+      if (response.success) {
+        if (response.user) {
+          setUser(response.user);
+          navigate('/dashboard');
+        }
+        // If no user (e.g. email confirmation required), success message is in response.message
+        return { success: true, message: response.message };
       } else {
         return { success: false, message: response.message || 'Registration failed' };
       }

@@ -33,11 +33,11 @@ const Login = () => {
       if (result.success) {
         toast({
           title: isLogin ? "Welcome back!" : "Account created!",
-          description: isLogin 
+          description: result.message ?? (isLogin 
             ? "Redirecting to your dashboard..." 
-            : "Your account has been created successfully!",
+            : "Your account has been created successfully!"),
         });
-        // Navigation is handled by AuthContext based on user role
+        // Navigation is handled by AuthContext based on user role (unless email confirmation required)
       } else {
         toast({
           title: "Error",
