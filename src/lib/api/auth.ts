@@ -1,4 +1,5 @@
 // Authentication API Service - Supabase Auth + backend user sync
+import { API_BASE_URL } from '@/lib/api/config';
 import { supabase } from '@/lib/supabase';
 
 export interface User {
@@ -21,8 +22,6 @@ export interface RegisterResponse {
   user?: User;
   message?: string;
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /** True if the error is a network/connection failure (e.g. backend not running) */
 function isNetworkError(error: unknown): boolean {

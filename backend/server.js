@@ -1378,6 +1378,11 @@ app.get('/api/health', (req, res) => {
 // ============================================================================
 
 const PORT = process.env.PORT || 3000;
+// On Railway, RAILWAY_PUBLIC_DOMAIN is set (e.g. allowance-ally-production.up.railway.app)
+const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : `http://localhost:${PORT}`;
+
 app.listen(PORT, () => {
   console.log('');
   console.log('╔════════════════════════════════════════╗');
@@ -1385,31 +1390,31 @@ app.listen(PORT, () => {
   console.log('╚════════════════════════════════════════╝');
   console.log('');
   console.log(`✓ Server running on port ${PORT}`);
-  console.log(`✓ API endpoints available at http://localhost:${PORT}/api`);
+  console.log(`✓ API endpoints available at ${BASE_URL}/api`);
   console.log('');
   console.log('Available endpoints:');
-  console.log(`  POST   http://localhost:${PORT}/api/auth/login`);
-  console.log(`  POST   http://localhost:${PORT}/api/auth/register`);
-  console.log(`  GET    http://localhost:${PORT}/api/auth/verify`);
-  console.log(`  GET    http://localhost:${PORT}/api/video-tips (public)`);
-  console.log(`  GET    http://localhost:${PORT}/api/expenses (auth required)`);
-  console.log(`  POST   http://localhost:${PORT}/api/expenses (auth required)`);
-  console.log(`  DELETE http://localhost:${PORT}/api/expenses/:id (auth required)`);
-  console.log(`  GET    http://localhost:${PORT}/api/budget (auth required)`);
-  console.log(`  PUT    http://localhost:${PORT}/api/budget (auth required)`);
-  console.log(`  GET    http://localhost:${PORT}/api/savings-goals (auth required)`);
-  console.log(`  POST   http://localhost:${PORT}/api/savings-goals (auth required)`);
-  console.log(`  PUT    http://localhost:${PORT}/api/savings-goals/:id (auth required)`);
-  console.log(`  DELETE http://localhost:${PORT}/api/savings-goals/:id (auth required)`);
-  console.log(`  GET    http://localhost:${PORT}/api/reports (auth required)`);
-  console.log(`  GET    http://localhost:${PORT}/api/discipline (auth required)`);
-  console.log(`  GET    http://localhost:${PORT}/api/dashboard (auth required)`);
-  console.log(`  GET    http://localhost:${PORT}/api/admin/users (admin only)`);
-  console.log(`  GET    http://localhost:${PORT}/api/admin/video-tips (admin only)`);
-  console.log(`  POST   http://localhost:${PORT}/api/admin/video-tips (admin only)`);
-  console.log(`  PUT    http://localhost:${PORT}/api/admin/video-tips/:id (admin only)`);
-  console.log(`  DELETE http://localhost:${PORT}/api/admin/video-tips/:id (admin only)`);
-  console.log(`  GET    http://localhost:${PORT}/api/health`);
+  console.log(`  POST   ${BASE_URL}/api/auth/login`);
+  console.log(`  POST   ${BASE_URL}/api/auth/register`);
+  console.log(`  GET    ${BASE_URL}/api/auth/verify`);
+  console.log(`  GET    ${BASE_URL}/api/video-tips (public)`);
+  console.log(`  GET    ${BASE_URL}/api/expenses (auth required)`);
+  console.log(`  POST   ${BASE_URL}/api/expenses (auth required)`);
+  console.log(`  DELETE ${BASE_URL}/api/expenses/:id (auth required)`);
+  console.log(`  GET    ${BASE_URL}/api/budget (auth required)`);
+  console.log(`  PUT    ${BASE_URL}/api/budget (auth required)`);
+  console.log(`  GET    ${BASE_URL}/api/savings-goals (auth required)`);
+  console.log(`  POST   ${BASE_URL}/api/savings-goals (auth required)`);
+  console.log(`  PUT    ${BASE_URL}/api/savings-goals/:id (auth required)`);
+  console.log(`  DELETE ${BASE_URL}/api/savings-goals/:id (auth required)`);
+  console.log(`  GET    ${BASE_URL}/api/reports (auth required)`);
+  console.log(`  GET    ${BASE_URL}/api/discipline (auth required)`);
+  console.log(`  GET    ${BASE_URL}/api/dashboard (auth required)`);
+  console.log(`  GET    ${BASE_URL}/api/admin/users (admin only)`);
+  console.log(`  GET    ${BASE_URL}/api/admin/video-tips (admin only)`);
+  console.log(`  POST   ${BASE_URL}/api/admin/video-tips (admin only)`);
+  console.log(`  PUT    ${BASE_URL}/api/admin/video-tips/:id (admin only)`);
+  console.log(`  DELETE ${BASE_URL}/api/admin/video-tips/:id (admin only)`);
+  console.log(`  GET    ${BASE_URL}/api/health`);
   console.log('');
   console.log('JWT Secret:', JWT_SECRET.substring(0, 20) + '...');
   console.log('');
