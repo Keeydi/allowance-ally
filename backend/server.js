@@ -11,8 +11,30 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+
+// CORS: allow Vercel frontend and local dev; required for browser preflight from allowance-ally.vercel.app
+const allowedOrigins = [
+  'https://allowance-ally.vercel.app',
+  'https://www.allowance-ally.vercel.app',
+  /^https:\/\/allowance-ally.*\.vercel\.app$/,
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:8080'
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    const allowed = allowedOrigins.some(o =>
+      typeof o === 'string' ? o === origin : o.test(origin)
+    );
+    cb(null, allowed ? origin : false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
-app.use(cors());
 
 // Database connection pool
 const pool = mysql.createPool({
