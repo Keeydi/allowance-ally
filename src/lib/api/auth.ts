@@ -113,7 +113,7 @@ export const login = async (email: string, password: string): Promise<LoginRespo
           success: false,
           message: isLocalDev
             ? 'Backend server is not reachable. Start it with: cd backend && npm start'
-            : 'Backend server is not reachable. Please try again later or check if the service is running.',
+            : 'Backend not reachable. If you see a CORS error: set VITE_API_URL in Vercel to your backend URL (e.g. https://your-backend.up.railway.app/api) and redeploy.',
         };
       }
       throw err;
@@ -188,7 +188,7 @@ export const register = async (
           success: true,
           message: isLocalDev
             ? 'Account created! Start the backend (cd backend && npm start), then sign in.'
-            : 'Account created! The server could not be reached. Try signing in in a moment.',
+            : 'Account created! Backend unreachable. Set VITE_API_URL in Vercel to your backend URL and redeploy if you see CORS errors.',
         };
       }
       throw err;

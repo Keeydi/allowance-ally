@@ -34,6 +34,16 @@ Backend is at **allowance-ally-production.up.railway.app**. In Railway:
 
 Push to `main` → Railway auto-deploys the backend; Vercel auto-deploys the frontend.
 
+### If you see CORS errors (frontend on Vercel not detecting backend)
+
+1. **Set `VITE_API_URL` in Vercel**  
+   Vercel → Project → **Settings** → **Environment Variables**  
+   Add `VITE_API_URL` = `https://allowance-ally-production.up.railway.app/api` (or your actual backend URL) for **Production** (and Preview if you use preview deployments).  
+   Then **Redeploy** (Deployments → … → Redeploy) so the build uses the new value.
+
+2. **Custom domain**  
+   If your frontend uses a custom domain (e.g. `app.yourdomain.com`), add it on the backend (Railway): set `CORS_ORIGIN=https://app.yourdomain.com` in the backend’s environment variables so the backend allows that origin.
+
 ---
 
 ## Option A: GitHub Pages (frontend) + Railway (backend)

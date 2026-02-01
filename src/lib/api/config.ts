@@ -16,3 +16,8 @@ const raw =
   (import.meta.env.PROD ? PRODUCTION_API_URL : 'http://localhost:3000/api');
 
 export const API_BASE_URL = normalizeApiBase(raw);
+
+// In dev, log the API base so you can confirm it points to your backend
+if (import.meta.env.DEV) {
+  console.debug('[API] Backend base URL:', API_BASE_URL);
+}

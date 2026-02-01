@@ -13,34 +13,58 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS - Vercel, Fly.io, Railway, Render, Koyeb + local dev
-const allowedOrigins = [
+// CORS - allow Vercel (all subdomains), Railway, Render, Fly, Koyeb + local dev
+const allowedOriginExact = [
   'https://allowance-ally.vercel.app',
   'https://www.allowance-ally.vercel.app',
-  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/,
-  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.fly\.dev$/,
-  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app$/,
-  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.onrender\.com$/,
-  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.koyeb\.app$/,
   'http://localhost:5173',
   'http://localhost:8080',
+  'http://localhost:3000',
   'http://127.0.0.1:5173',
-  'http://127.0.0.1:8080'
+  'http://127.0.0.1:8080',
+  'http://127.0.0.1:3000'
+];
+// Any *.vercel.app, *.railway.app, *.onrender.com, *.fly.dev, *.koyeb.app (preview + production)
+const allowedOriginPatterns = [
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.vercel\.app$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.up\.railway\.app$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.onrender\.app$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.onrender\.com$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.fly\.dev$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]*\.koyeb\.app$/
 ];
 if (process.env.CORS_ORIGIN) {
-  allowedOrigins.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()));
+  allowedOriginExact.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean));
 }
-const isOriginAllowed = (origin) =>
-  !origin || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin));
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (allowedOriginExact.includes(origin)) return true;
+  return allowedOriginPatterns.some(re => re.test(origin));
+}
 
 app.use((req, res, next) => {
-  if (req.headers.origin && isOriginAllowed(req.headers.origin)) {
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+  const origin = req.headers.origin;
+  if (req.method === 'OPTIONS') {
+    if (origin && isOriginAllowed(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    } else if (process.env.CORS_ORIGIN) {
+      res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN.split(',')[0].trim());
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    return res.sendStatus(204);
+  }
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (process.env.CORS_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN.split(',')[0].trim());
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
   res.setHeader('Access-Control-Max-Age', '86400');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   next();
 });
 
