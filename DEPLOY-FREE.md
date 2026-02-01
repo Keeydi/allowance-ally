@@ -25,11 +25,7 @@ After the service is created, go to **Environment** tab and add:
 
 | Key | Value |
 |-----|-------|
-| `DB_HOST` | Your MySQL host (see below) |
-| `DB_PORT` | `3306` |
-| `DB_USER` | Your DB username |
-| `DB_PASSWORD` | Your DB password |
-| `DB_NAME` | `allowance_ally` |
+| `DATABASE_URL` | Supabase: Project Settings → Database → Connection string (URI) |
 | `JWT_SECRET` | Random string, 32+ chars |
 | `SUPABASE_JWT_SECRET` | From Supabase Dashboard → Settings → API |
 
@@ -42,16 +38,13 @@ Update `VITE_API_URL` in Vercel to this URL.
 
 ---
 
-## Free MySQL options (no credit card)
+## Database: Supabase (PostgreSQL)
 
-| Provider | Free tier | Notes |
-|----------|-----------|-------|
-| **PlanetScale** | 5GB | MySQL-compatible, 90-day trial |
-| **Aiven** | 30-day trial | MySQL hosting |
-| **TiDB Cloud** | 5GB | MySQL-compatible |
-| **Railway** | $5 credit/mo | Requires card for credit |
+The app uses **Supabase** for both auth and data. No separate MySQL needed.
 
-**PlanetScale** is popular: [planetscale.com](https://planetscale.com) → Create database → get host, user, password.
+1. **Supabase Dashboard** → Project Settings → Database
+2. Copy **Connection string** (URI) → use as `DATABASE_URL`
+3. Run `database/setup-supabase.sql` in Supabase SQL Editor (one-time)
 
 ---
 
@@ -87,5 +80,5 @@ Create the service **manually** instead:
 | 1 | Push to GitHub |
 | 2 | [render.com](https://render.com) → New → Blueprint |
 | 3 | Connect repo, Apply, select **Free** |
-| 4 | Add DB + JWT env vars |
+| 4 | Add DATABASE_URL, JWT_SECRET, SUPABASE_JWT_SECRET |
 | 5 | Set `VITE_API_URL` in Vercel to `https://your-app.onrender.com/api` |

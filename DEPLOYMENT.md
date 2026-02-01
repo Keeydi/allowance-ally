@@ -30,7 +30,7 @@ Build is already set by `vercel.json`: `npm run build`, output `dist`, SPA rewri
 Backend is at **allowance-ally-production.up.railway.app**. In Railway:
 
 - **Settings** → **Networking** → generated domain = that URL.
-- **Variables**: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
+- **Variables**: `DATABASE_URL` (Supabase connection string), `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
 
 Push to `main` → Railway auto-deploys the backend; Vercel auto-deploys the frontend.
 
@@ -50,7 +50,7 @@ Repo → **Settings → Pages** → **Source: GitHub Actions**.
 2. **New Project** → **Deploy from GitHub repo** → select this repo.
 3. Railway creates a service. Open it → **Settings**:
    - **Root Directory:** set to `backend`.
-4. **Variables** tab: add `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
+4. **Variables** tab: add `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
 5. **Settings → Networking** → **Generate domain** (e.g. `https://allowance-ally-production.up.railway.app`).
 
 ### 3. Add GitHub repo secrets (for Pages build)
@@ -89,10 +89,10 @@ The script will: install Fly CLI if needed, open Fly login in your browser, and 
    cd backend
    fly launch --no-deploy
    ```
-   When asked for app name, use e.g. `allowance-ally-api` (or leave default). Choose a region. Say **no** to PostgreSQL if you use your own MySQL.
+   When asked for app name, use e.g. `allowance-ally-api` (or leave default). Choose a region. Say **no** to Fly PostgreSQL (we use Supabase instead).
 4. Set secrets on Fly (DB, JWT, Supabase):
    ```bash
-   fly secrets set DB_HOST=your-db-host DB_PORT=3306 DB_USER=... DB_PASSWORD=... DB_NAME=allowance_ally
+   fly secrets set DATABASE_URL=your-supabase-connection-string
    fly secrets set JWT_SECRET=your-jwt-secret SUPABASE_JWT_SECRET=your-supabase-jwt-secret
    ```
 5. Get a deploy token: **Fly.io Dashboard → Account → Access Tokens → Create deploy token**. Copy the token.
@@ -115,7 +115,7 @@ In your repo: **Settings → Secrets and variables → Actions → New repositor
 
 ### 5. Database
 
-The backend expects **MySQL**. Use a hosted MySQL (e.g. [PlanetScale](https://planetscale.com), [Railway](https://railway.app), or your own) and set `DB_*` secrets on Fly (step 2.4).
+The backend uses **PostgreSQL** (Supabase). Use [Supabase](https://supabase.com) for the database. Run `database/setup-supabase.sql` in Supabase SQL Editor, then set `DATABASE_URL` on Fly (step 2.4).
 
 ---
 
@@ -139,16 +139,13 @@ Use **Render** instead of Railway for the backend. Vercel setup is the same; set
 4. **Runtime:** Node. **Build:** `npm install`. **Start:** `npm start`.
    - Or use the **Blueprint** from this repo: **New → Blueprint**, connect repo; Render will read `render.yaml`.
 5. **Environment** (Environment tab), add:
-   - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (your MySQL or DB)
+   - `DATABASE_URL` (Supabase: Project Settings → Database → Connection string)
    - `JWT_SECRET`
    - `SUPABASE_JWT_SECRET` (from Supabase Dashboard → Settings → API → JWT Secret)
    - (Optional) `PORT` — Render sets this; only override if needed.
 6. Deploy. Render will give a URL (e.g. `https://allowance-ally-api.onrender.com`).
 
-**Database:** The backend expects **MySQL**. Options:
-
-- Use a hosted MySQL (e.g. [PlanetScale](https://planetscale.com), [Railway](https://railway.app), or your own).
-- Put the connection details in the env vars above.
+**Database:** The backend uses **PostgreSQL** (Supabase). Use [Supabase](https://supabase.com): run `database/setup-supabase.sql` in SQL Editor, then set `DATABASE_URL`.
 
 ---
 
@@ -190,7 +187,7 @@ If you see **"There's an error above. Please fix it to continue"** when deployin
    - **Build Command:** `npm install`
    - **Start Command:** `npm start`
 4. Under **Instance Type**, click **Free** ($0/month). If you don’t select a plan, Render can show an error.
-5. Click **Create Web Service**. Then add env vars (DB_*, JWT_SECRET, SUPABASE_JWT_SECRET) under the **Environment** tab.
+5. Click **Create Web Service**. Then add env vars (DATABASE_URL, JWT_SECRET, SUPABASE_JWT_SECRET) under the **Environment** tab.
 
 ### Option B: If you use the Blueprint (render.yaml)
 
@@ -202,5 +199,5 @@ If you see **"There's an error above. Please fix it to continue"** when deployin
 ### Other checks
 
 - **Name:** must be unique in your Render account (e.g. `allowance-ally-api` or `yourname-allowance-ally`).
-- **Environment variables:** add in Dashboard → Environment: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
+- **Environment variables:** add in Dashboard → Environment: `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_JWT_SECRET`.
 - **Free tier:** instances **spin down after ~15 min** of no traffic; the next request can take 30–60 s and look like an error until the instance wakes up.

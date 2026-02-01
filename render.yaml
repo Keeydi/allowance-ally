@@ -2,7 +2,7 @@
 # https://render.com/docs/blueprint-spec
 # 1. Push to GitHub
 # 2. New > Blueprint > connect repo
-# 3. Add DB_*, JWT_SECRET, SUPABASE_JWT_SECRET in Environment
+# 3. Add DATABASE_URL (Supabase), JWT_SECRET, SUPABASE_JWT_SECRET in Environment
 
 services:
   - type: web

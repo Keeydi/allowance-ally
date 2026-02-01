@@ -6,10 +6,8 @@
 -- Do NOT run setup.sql (MySQL) in Supabase - it uses MySQL-only syntax.
 -- This file uses PostgreSQL syntax (SERIAL, ON CONFLICT, etc.).
 --
--- Note: The Node backend (server.js) currently uses MySQL. To use Supabase
--- as the app database you would need to switch the backend to PostgreSQL
--- (e.g. pg + connection string from Supabase). This script creates the
--- schema in Supabase for that or for reference.
+-- Backend uses PostgreSQL (pg). Set DATABASE_URL in env to your Supabase
+-- connection string (Project Settings > Database > Connection string).
 -- ============================================================================
 
 -- Users table (auth is via Supabase Auth; this table stores app profile + link)

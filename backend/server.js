@@ -4,7 +4,7 @@
  */
 
 const express = require('express');
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const compression = require('compression');
@@ -51,17 +51,26 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '100kb' }));
 
-// Database connection pool
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'allowance_ally',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+// Database connection (PostgreSQL / Supabase)
+const connectionString = process.env.DATABASE_URL || (
+  process.env.DB_HOST
+    ? `postgresql://${process.env.DB_USER}:${encodeURIComponent(process.env.DB_PASSWORD || '')}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`
+    : null
+);
+const pool = new Pool({
+  connectionString,
+  ssl: connectionString?.includes('supabase') ? { rejectUnauthorized: false } : false,
+  max: 10,
+  idleTimeoutMillis: 30000
 });
+
+// Helper: run query, return [rows] to match previous MySQL usage
+const query = async (sql, params = []) => {
+  let i = 0;
+  const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+  const result = await pool.query(pgSql, params);
+  return [result.rows, result];
+};
 
 // JWT Configuration
 const JWT_SECRET = process.env.JWT_SECRET || '2788586556239fc3edf9bee4a806f67e';
@@ -72,14 +81,11 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
 }
 
 // Test database connection
-pool.getConnection()
-  .then(connection => {
-    console.log('✓ Database connected successfully');
-    connection.release();
-  })
+pool.query('SELECT 1')
+  .then(() => console.log('✓ Database connected successfully'))
   .catch(err => {
     console.error('✗ Database connection failed:', err.message);
-    console.error('Please check your .env file and MySQL server');
+    console.error('Please check DATABASE_URL (Supabase: Project Settings > Database)');
   });
 
 // ============================================================================
@@ -164,7 +170,7 @@ const sendError = (res, status, message) => {
  * Recalculate and update budget spent amounts based on expenses for current period
  */
 const updateBudgetSpent = async (userId) => {
-  const [budgets] = await pool.execute(
+  const [budgets] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [userId]
   );
@@ -190,7 +196,7 @@ const updateBudgetSpent = async (userId) => {
   }
 
   // Get expenses for current period only
-  const [expenses] = await pool.execute(
+  const [expenses] = await query(
     `SELECT category, SUM(amount) as total 
      FROM expenses 
      WHERE user_id = ? AND date >= ?
@@ -213,7 +219,7 @@ const updateBudgetSpent = async (userId) => {
     }
   });
 
-  await pool.execute(
+  await query(
     'UPDATE budgets SET needs_spent = ?, wants_spent = ?, savings_spent = ? WHERE user_id = ?',
     [needsSpent, wantsSpent, savingsSpent, userId]
   );
@@ -224,7 +230,7 @@ const updateBudgetSpent = async (userId) => {
  * For daily budgets, leftover amount from previous day is added to today's budget
  */
 const handleBudgetPeriodReset = async (userId) => {
-  const [budgets] = await pool.execute(
+  const [budgets] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [userId]
   );
@@ -252,7 +258,7 @@ const handleBudgetPeriodReset = async (userId) => {
     const newCarryover = leftover;
 
     // Reset spent amounts for new day
-    await pool.execute(
+    await query(
       `UPDATE budgets 
        SET needs_spent = 0, 
            wants_spent = 0, 
@@ -267,7 +273,7 @@ const handleBudgetPeriodReset = async (userId) => {
     await updateBudgetSpent(userId);
   } else if (periodType !== 'daily' && lastResetDate !== today) {
     // For weekly/monthly, just update the reset date (no carryover)
-    await pool.execute(
+    await query(
       'UPDATE budgets SET last_reset_date = ? WHERE user_id = ?',
       [today, userId]
     );
@@ -303,19 +309,19 @@ const findOrCreateUserFromSupabase = async (payload) => {
   const firstName = user_metadata.first_name || null;
   const lastName = user_metadata.last_name || null;
 
-  const [existing] = await pool.execute(
+  const [existing] = await query(
     'SELECT id, email, role, first_name, last_name FROM users WHERE supabase_id = ? AND is_active = TRUE',
     [sub]
   );
   if (existing.length > 0) return existing[0];
 
-  const [insertResult] = await pool.execute(
-    'INSERT INTO users (supabase_id, email, password, role, first_name, last_name) VALUES (?, ?, NULL, 0, ?, ?)',
+  const [, insertRes] = await query(
+    'INSERT INTO users (supabase_id, email, password, role, first_name, last_name) VALUES (?, ?, NULL, 0, ?, ?) RETURNING id',
     [sub, email, firstName, lastName]
   );
-  const [newUser] = await pool.execute(
+  const [newUser] = await query(
     'SELECT id, email, role, first_name, last_name FROM users WHERE id = ?',
-    [insertResult.insertId]
+    [insertRes.rows[0]?.id]
   );
   return newUser[0] || null;
 };
@@ -324,7 +330,7 @@ const findOrCreateUserFromSupabase = async (payload) => {
 const resolveTokenToUser = async (token) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const [users] = await pool.execute(
+    const [users] = await query(
       'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
       [decoded.id]
     );
@@ -388,7 +394,7 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
     return sendError(res, 400, 'Email and password are required');
   }
 
-  const [users] = await pool.execute(
+  const [users] = await query(
     'SELECT id, email, password, role, first_name, last_name FROM users WHERE email = ? AND is_active = TRUE',
     [email]
   );
@@ -404,7 +410,7 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
     return sendError(res, 401, 'Invalid email or password');
   }
 
-  await pool.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+  await query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
 
   const token = generateToken(user);
 
@@ -432,7 +438,7 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
     return sendError(res, 400, 'Password must be at least 6 characters');
   }
 
-  const [existingUsers] = await pool.execute(
+  const [existingUsers] = await query(
     'SELECT id FROM users WHERE email = ?',
     [email]
   );
@@ -442,17 +448,18 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const [result] = await pool.execute(
-    'INSERT INTO users (email, password, role, first_name, last_name) VALUES (?, ?, 0, ?, ?)',
+  const [, insertRes] = await query(
+    'INSERT INTO users (email, password, role, first_name, last_name) VALUES (?, ?, 0, ?, ?) RETURNING id',
     [email, hashedPassword, first_name || null, last_name || null]
   );
+  const newId = insertRes.rows[0]?.id;
 
-  const token = generateToken({ id: result.insertId, email, role: 0 });
+  const token = generateToken({ id: newId, email, role: 0 });
 
   res.status(201).json({
     success: true,
     user: {
-      id: result.insertId,
+      id: newId,
       email,
       role: 0,
       first_name: first_name || null,
@@ -487,7 +494,7 @@ app.get('/api/auth/me', asyncHandler(async (req, res) => {
 // ============================================================================
 
 app.get('/api/admin/users', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
-  const [allUsers] = await pool.execute(
+  const [allUsers] = await query(
     `SELECT id, email, role, first_name, last_name, created_at, last_login, is_active 
      FROM users 
      ORDER BY created_at DESC`
@@ -510,7 +517,7 @@ app.get('/api/admin/users', verifyToken, verifyAdmin, asyncHandler(async (req, r
 }));
 
 app.get('/api/admin/video-tips', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
-  const [videos] = await pool.execute(
+  const [videos] = await query(
     'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips ORDER BY created_at DESC'
   );
   res.json({ success: true, videos: videos.map(formatVideo) });
@@ -525,14 +532,14 @@ app.post('/api/admin/video-tips', verifyToken, verifyAdmin, asyncHandler(async (
 
   const { embedUrl, thumbnail } = processYouTubeUrl(videoUrl);
 
-  const [result] = await pool.execute(
-    'INSERT INTO video_tips (title, description, video_url, thumbnail_url, category, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+  const [, insertRes] = await query(
+    'INSERT INTO video_tips (title, description, video_url, thumbnail_url, category, created_by) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
     [title, description || '', embedUrl, thumbnail, category, req.user.id]
   );
 
-  const [newVideo] = await pool.execute(
+  const [newVideo] = await query(
     'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips WHERE id = ?',
-    [result.insertId]
+    [insertRes.rows[0]?.id]
   );
   res.status(201).json({ success: true, video: formatVideo(newVideo[0]) });
 }));
@@ -547,12 +554,12 @@ app.put('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(asyn
 
   const { embedUrl, thumbnail } = processYouTubeUrl(videoUrl);
 
-  await pool.execute(
+  await query(
     'UPDATE video_tips SET title = ?, description = ?, video_url = ?, thumbnail_url = ?, category = ? WHERE id = ?',
     [title, description || '', embedUrl, thumbnail, category, id]
   );
 
-  const [updatedVideo] = await pool.execute(
+  const [updatedVideo] = await query(
     'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips WHERE id = ?',
     [id]
   );
@@ -562,9 +569,9 @@ app.put('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(asyn
 
 app.delete('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const [result] = await pool.execute('DELETE FROM video_tips WHERE id = ?', [id]);
+  const [, res2] = await query('DELETE FROM video_tips WHERE id = ?', [id]);
 
-  if (result.affectedRows === 0) {
+  if (res2.rowCount === 0) {
     return sendError(res, 404, 'Video tip not found');
   }
 
@@ -576,7 +583,7 @@ app.delete('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(a
 // ============================================================================
 
 app.get('/api/video-tips', asyncHandler(async (req, res) => {
-  const [videos] = await pool.execute(
+  const [videos] = await query(
     'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips WHERE is_active = TRUE ORDER BY created_at DESC'
   );
   res.json({ success: true, videos: videos.map(formatVideo) });
@@ -587,7 +594,7 @@ app.get('/api/video-tips', asyncHandler(async (req, res) => {
 // ============================================================================
 
 app.get('/api/expenses', verifyToken, asyncHandler(async (req, res) => {
-  const [expenses] = await pool.execute(
+  const [expenses] = await query(
     `SELECT id, category, amount, date, note, created_at 
      FROM expenses 
      WHERE user_id = ? 
@@ -614,17 +621,17 @@ app.post('/api/expenses', verifyToken, asyncHandler(async (req, res) => {
     return sendError(res, 400, 'Category, amount, and date are required');
   }
 
-  const [result] = await pool.execute(
-    'INSERT INTO expenses (user_id, category, amount, date, note) VALUES (?, ?, ?, ?, ?)',
+  const [, insertRes] = await query(
+    'INSERT INTO expenses (user_id, category, amount, date, note) VALUES (?, ?, ?, ?, ?) RETURNING id',
     [req.user.id, category, amount, date, note || '']
   );
 
   // Update budget spent amounts
   await updateBudgetSpent(req.user.id);
 
-  const [newExpense] = await pool.execute(
+  const [newExpense] = await query(
     'SELECT id, category, amount, date, note FROM expenses WHERE id = ?',
-    [result.insertId]
+    [insertRes.rows[0]?.id]
   );
 
   res.status(201).json({
@@ -641,12 +648,12 @@ app.post('/api/expenses', verifyToken, asyncHandler(async (req, res) => {
 
 app.delete('/api/expenses/:id', verifyToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const [result] = await pool.execute(
+  const [, res2] = await query(
     'DELETE FROM expenses WHERE id = ? AND user_id = ?',
     [id, req.user.id]
   );
 
-  if (result.affectedRows === 0) {
+  if (res2.rowCount === 0) {
     return sendError(res, 404, 'Expense not found');
   }
 
@@ -664,19 +671,19 @@ app.get('/api/budget', verifyToken, asyncHandler(async (req, res) => {
   // Handle period reset and carryover before fetching budget
   await handleBudgetPeriodReset(req.user.id);
 
-  const [budgets] = await pool.execute(
+  const [budgets] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
 
   if (budgets.length === 0) {
     const today = formatDate(new Date());
-    await pool.execute(
+    await query(
       'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation, last_reset_date, carryover_amount) VALUES (?, 2500, ?, 50, 30, 20, ?, 0)',
       [req.user.id, 'monthly', today]
     );
     
-    const [newBudget] = await pool.execute(
+    const [newBudget] = await query(
       'SELECT * FROM budgets WHERE user_id = ?',
       [req.user.id]
     );
@@ -731,13 +738,13 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
   const period = validPeriodTypes.includes(periodType) ? periodType : 'monthly';
   const today = formatDate(new Date());
 
-  const [existing] = await pool.execute(
+  const [existing] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
 
   if (existing.length === 0) {
-    await pool.execute(
+    await query(
       'INSERT INTO budgets (user_id, total_allowance, period_type, needs_allocation, wants_allocation, savings_allocation, last_reset_date, carryover_amount) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
       [req.user.id, totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation, today]
     );
@@ -748,7 +755,7 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
       ? parseFloat(existing[0].carryover_amount || 0) 
       : 0;
     
-    await pool.execute(
+    await query(
       'UPDATE budgets SET total_allowance = ?, period_type = ?, needs_allocation = ?, wants_allocation = ?, savings_allocation = ?, carryover_amount = ?, last_reset_date = ? WHERE user_id = ?',
       [totalAllowance, period, needsAllocation, wantsAllocation, savingsAllocation, carryoverAmount, today, req.user.id]
     );
@@ -758,7 +765,7 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
   await handleBudgetPeriodReset(req.user.id);
   await updateBudgetSpent(req.user.id);
 
-  const [updated] = await pool.execute(
+  const [updated] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
@@ -789,7 +796,7 @@ app.put('/api/budget', verifyToken, asyncHandler(async (req, res) => {
 // ============================================================================
 
 app.get('/api/savings-goals', verifyToken, asyncHandler(async (req, res) => {
-  const [goals] = await pool.execute(
+  const [goals] = await query(
     `SELECT id, name, target, current, target_date 
      FROM savings_goals 
      WHERE user_id = ? 
@@ -816,14 +823,14 @@ app.post('/api/savings-goals', verifyToken, asyncHandler(async (req, res) => {
     return sendError(res, 400, 'Name and target are required');
   }
 
-  const [result] = await pool.execute(
-    'INSERT INTO savings_goals (user_id, name, target, current, target_date) VALUES (?, ?, ?, 0, ?)',
+  const [, insertRes] = await query(
+    'INSERT INTO savings_goals (user_id, name, target, current, target_date) VALUES (?, ?, ?, 0, ?) RETURNING id',
     [req.user.id, name, target, targetDate || null]
   );
 
-  const [newGoal] = await pool.execute(
+  const [newGoal] = await query(
     'SELECT id, name, target, current, target_date FROM savings_goals WHERE id = ?',
-    [result.insertId]
+    [insertRes.rows[0]?.id]
   );
 
   res.status(201).json({
@@ -842,7 +849,7 @@ app.put('/api/savings-goals/:id', verifyToken, asyncHandler(async (req, res) => 
   const { id } = req.params;
   const { amount, name, target, targetDate } = req.body;
 
-  const [goals] = await pool.execute(
+  const [goals] = await query(
     'SELECT * FROM savings_goals WHERE id = ? AND user_id = ?',
     [id, req.user.id]
   );
@@ -855,15 +862,15 @@ app.put('/api/savings-goals/:id', verifyToken, asyncHandler(async (req, res) => 
 
   if (amount !== undefined) {
     const newCurrent = parseFloat(goal.current) + parseFloat(amount);
-    await pool.execute('UPDATE savings_goals SET current = ? WHERE id = ?', [newCurrent, id]);
+    await query('UPDATE savings_goals SET current = ? WHERE id = ?', [newCurrent, id]);
   } else {
-    await pool.execute(
+    await query(
       'UPDATE savings_goals SET name = ?, target = ?, target_date = ? WHERE id = ?',
       [name || goal.name, target || goal.target, targetDate !== undefined ? targetDate : goal.target_date, id]
     );
   }
 
-  const [updated] = await pool.execute(
+  const [updated] = await query(
     'SELECT id, name, target, current, target_date FROM savings_goals WHERE id = ?',
     [id]
   );
@@ -882,12 +889,12 @@ app.put('/api/savings-goals/:id', verifyToken, asyncHandler(async (req, res) => 
 
 app.delete('/api/savings-goals/:id', verifyToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const [result] = await pool.execute(
+  const [, res2] = await query(
     'DELETE FROM savings_goals WHERE id = ? AND user_id = ?',
     [id, req.user.id]
   );
 
-  if (result.affectedRows === 0) {
+  if (res2.rowCount === 0) {
     return sendError(res, 404, 'Savings goal not found');
   }
 
@@ -901,7 +908,7 @@ app.delete('/api/savings-goals/:id', verifyToken, asyncHandler(async (req, res) 
 app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
   const { period = 'week' } = req.query;
   
-  const [budgets] = await pool.execute(
+  const [budgets] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
@@ -921,7 +928,7 @@ app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
   const endDate = new Date(now);
   endDate.setHours(23, 59, 59, 999);
 
-  const [expensesByCat] = await pool.execute(
+  const [expensesByCat] = await query(
     `SELECT category, SUM(amount) as total 
      FROM expenses 
      WHERE user_id = ? AND date >= ? AND date <= ?
@@ -953,7 +960,7 @@ app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
   const weekEnd = new Date(now);
   weekEnd.setHours(23, 59, 59, 999);
 
-  const [weekExpenses] = await pool.execute(
+  const [weekExpenses] = await query(
     `SELECT date, SUM(amount) as total FROM expenses 
      WHERE user_id = ? AND date >= ? AND date <= ?
      GROUP BY date`,
@@ -997,11 +1004,11 @@ app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const fourMonthsStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
-  const [allMonthExpenses] = await pool.execute(
-    `SELECT DATE_FORMAT(date, '%Y-%m') as month_key, SUM(amount) as total 
+  const [allMonthExpenses] = await query(
+    `SELECT TO_CHAR(date, 'YYYY-MM') as month_key, SUM(amount) as total 
      FROM expenses 
      WHERE user_id = ? AND date >= ?
-     GROUP BY month_key`,
+     GROUP BY TO_CHAR(date, 'YYYY-MM')`,
     [req.user.id, formatDate(fourMonthsStart)]
   );
   const monthTotals = new Map(allMonthExpenses.map(r => [r.month_key, parseFloat(r.total || 0)]));
@@ -1077,7 +1084,7 @@ app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
 // ============================================================================
 
 app.get('/api/discipline', verifyToken, asyncHandler(async (req, res) => {
-  const [budgets] = await pool.execute(
+  const [budgets] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
@@ -1098,7 +1105,7 @@ app.get('/api/discipline', verifyToken, asyncHandler(async (req, res) => {
   const endOfWeek = new Date(now);
   endOfWeek.setHours(23, 59, 59, 999);
 
-  const [weekExpenses] = await pool.execute(
+  const [weekExpenses] = await query(
     `SELECT category, SUM(amount) as total 
      FROM expenses 
      WHERE user_id = ? AND date >= ? AND date <= ?
@@ -1185,7 +1192,7 @@ app.get('/api/discipline', verifyToken, asyncHandler(async (req, res) => {
   const weekStartD = new Date(now);
   weekStartD.setDate(now.getDate() - 6);
   weekStartD.setHours(0, 0, 0, 0);
-  const [daysWithData] = await pool.execute(
+  const [daysWithData] = await query(
     `SELECT DISTINCT date FROM expenses 
      WHERE user_id = ? AND date >= ? AND date <= ?`,
     [req.user.id, formatDate(weekStartD), formatDate(now)]
@@ -1225,7 +1232,7 @@ app.get('/api/discipline', verifyToken, asyncHandler(async (req, res) => {
 // ============================================================================
 
 app.get('/api/dashboard', verifyToken, asyncHandler(async (req, res) => {
-  const [budgets] = await pool.execute(
+  const [budgets] = await query(
     'SELECT * FROM budgets WHERE user_id = ?',
     [req.user.id]
   );
@@ -1245,7 +1252,7 @@ app.get('/api/dashboard', verifyToken, asyncHandler(async (req, res) => {
   const endOfMonth = new Date(now);
   endOfMonth.setHours(23, 59, 59, 999);
 
-  const [recentExpenses] = await pool.execute(
+  const [recentExpenses] = await query(
     `SELECT id, category, amount, date, note 
      FROM expenses 
      WHERE user_id = ? AND date >= ? AND date <= ?
@@ -1262,7 +1269,7 @@ app.get('/api/dashboard', verifyToken, asyncHandler(async (req, res) => {
     note: exp.note
   }));
 
-  const [savingsGoals] = await pool.execute(
+  const [savingsGoals] = await query(
     `SELECT * FROM savings_goals 
      WHERE user_id = ? AND current < target
      ORDER BY created_at DESC

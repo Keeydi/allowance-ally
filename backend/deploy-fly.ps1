@@ -7,10 +7,7 @@
 $env:Path = "$env:USERPROFILE\.fly\bin;$env:Path"
 
 # === EDIT THESE VALUES ===
-$DB_HOST = "your-mysql-host"      # e.g. aws-0-ap-southeast-1.pooler.supabase.com
-$DB_USER = "your-db-user"
-$DB_PASSWORD = "your-db-password"
-$DB_NAME = "allowance_ally"
+$DATABASE_URL = "postgresql://..."  # Supabase: Project Settings > Database > Connection string (URI)
 $JWT_SECRET = "your-secure-random-string-at-least-32-chars"
 $SUPABASE_JWT_SECRET = "your-supabase-jwt-secret"  # From Supabase Dashboard > Settings > API
 
@@ -23,11 +20,7 @@ flyctl launch --no-deploy --yes --name allowance-ally-api 2>$null
 # Set secrets
 Write-Host "`n2. Setting secrets..." -ForegroundColor Yellow
 flyctl secrets set `
-  DB_HOST=$DB_HOST `
-  DB_PORT=3306 `
-  DB_USER=$DB_USER `
-  DB_PASSWORD=$DB_PASSWORD `
-  DB_NAME=$DB_NAME `
+  DATABASE_URL=$DATABASE_URL `
   JWT_SECRET=$JWT_SECRET `
   SUPABASE_JWT_SECRET=$SUPABASE_JWT_SECRET `
   NODE_ENV=production
