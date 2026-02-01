@@ -30,6 +30,22 @@ function isNetworkError(error: unknown): boolean {
   return false;
 }
 
+/** Parse JSON or throw a clear error if response is HTML (e.g. 404/502 page) */
+async function safeParseJson<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (text.trim().toLowerCase().startsWith('<!')) {
+    throw new Error(
+      `Backend returned HTML instead of JSON (${response.status}). ` +
+        'Check that VITE_API_URL points to your Railway backend, not the frontend URL.'
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid response from backend: ${text.slice(0, 100)}...`);
+  }
+}
+
 /**
  * Fetch app user from backend (syncs Supabase user to MySQL and returns our User type)
  */
@@ -42,12 +58,12 @@ async function fetchAppUser(accessToken: string): Promise<User | null> {
     },
   });
 
+  const data = await safeParseJson<{ user?: User; message?: string }>(response);
+
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || 'Failed to get user');
+    throw new Error((data as { message?: string }).message || 'Failed to get user');
   }
 
-  const data = await response.json();
   return data.user ?? null;
 }
 
