@@ -92,9 +92,12 @@ export const login = async (email: string, password: string): Promise<LoginRespo
       return { success: true, user, token: session.access_token };
     } catch (err) {
       if (isNetworkError(err)) {
+        const isLocalDev = import.meta.env.DEV || /localhost|127\.0\.0\.1/.test(API_BASE_URL);
         return {
           success: false,
-          message: 'Backend server is not reachable. Start it with: cd backend && npm start',
+          message: isLocalDev
+            ? 'Backend server is not reachable. Start it with: cd backend && npm start'
+            : 'Backend server is not reachable. Please try again later or check if the service is running.',
         };
       }
       throw err;
@@ -164,10 +167,10 @@ export const register = async (
       return { success: true, user };
     } catch (err) {
       if (isNetworkError(err)) {
-        const isLocal = /localhost|127\.0\.0\.1/.test(API_BASE_URL);
+        const isLocalDev = import.meta.env.DEV || /localhost|127\.0\.0\.1/.test(API_BASE_URL);
         return {
           success: true,
-          message: isLocal
+          message: isLocalDev
             ? 'Account created! Start the backend (cd backend && npm start), then sign in.'
             : 'Account created! The server could not be reached. Try signing in in a moment.',
         };
