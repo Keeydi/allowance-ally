@@ -25,13 +25,30 @@ const allowedOrigins = [
 if (process.env.CORS_ORIGIN) {
   allowedOrigins.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()));
 }
+
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  return allowedOrigins.some(o =>
+    typeof o === 'string' ? o === origin : o.test(origin)
+  );
+}
+
+// Handle preflight (OPTIONS) explicitly so CORS headers are always sent
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
+
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    const allowed = allowedOrigins.some(o =>
-      typeof o === 'string' ? o === origin : o.test(origin)
-    );
-    cb(null, allowed ? origin : false);
+    cb(null, isOriginAllowed(origin) ? origin : false);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
