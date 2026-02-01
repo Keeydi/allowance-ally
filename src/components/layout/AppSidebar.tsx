@@ -11,8 +11,7 @@ import {
   Wallet
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
 
 import {
   Sidebar,
@@ -48,31 +47,11 @@ const resourceItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { user, logout, isAdmin } = useAuth();
-  const navigate = useNavigate();
-
-  const handleLogoClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Navigate to dashboard based on user role, don't logout
-    if (isAdmin()) {
-      navigate("/admin");
-    } else {
-      navigate("/dashboard");
-    }
-  };
-
-  const handleLogout = (e: React.MouseEvent) => {
-    e.preventDefault();
-    logout();
-  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
       <SidebarHeader className="p-4">
-        <button 
-          onClick={handleLogoClick}
-          className="flex items-center gap-2 group w-full text-left"
-        >
+        <Link to="/" className="flex items-center gap-2 group">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-soft group-hover:shadow-glow transition-shadow shrink-0">
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -81,7 +60,7 @@ export function AppSidebar() {
               Budget<span className="text-primary">Buddy</span>
             </span>
           )}
-        </button>
+        </Link>
       </SidebarHeader>
 
       <SidebarContent className="px-2">
@@ -156,13 +135,13 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Log Out">
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors w-full"
+              <Link 
+                to="/" 
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
               >
                 <LogOut className="h-5 w-5 shrink-0" />
                 {!collapsed && <span>Log Out</span>}
-              </button>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

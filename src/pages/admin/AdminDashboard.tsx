@@ -1,18 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Video, TrendingUp, MessageSquare } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
 
 const AdminDashboard = () => {
-  const navigate = useNavigate();
-  const { isAdmin } = useAuth();
-
-  const handleLogoClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Navigate to admin dashboard, don't logout
-    navigate("/admin");
-  };
-
   const stats = [
     { label: "Total Users", value: "1,234", icon: Users, color: "text-primary" },
     { label: "Video Tips", value: "48", icon: Video, color: "text-emerald-500" },
@@ -25,19 +15,16 @@ const AdminDashboard = () => {
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-card/80 backdrop-blur-md">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
-              onClick={handleLogoClick}
-              className="text-xl font-bold text-foreground hover:opacity-80 transition-opacity"
-            >
+            <Link to="/" className="text-xl font-bold text-foreground">
               Budget<span className="text-primary">Buddy</span>
               <span className="ml-2 text-sm font-normal text-muted-foreground">Admin</span>
-            </button>
+            </Link>
           </div>
           <nav className="flex items-center gap-6">
             <Link to="/admin" className="text-sm font-medium text-foreground">Dashboard</Link>
             <Link to="/admin/users" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Users</Link>
             <Link to="/admin/video-tips" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Video Tips</Link>
-            <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">User Dashboard</Link>
+            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
           </nav>
         </div>
       </header>

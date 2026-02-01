@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,17 @@ import {
   BookOpen,
   PiggyBank,
   ShoppingBag,
-  MoreHorizontal,
-  Loader2
+  MoreHorizontal
 } from "lucide-react";
 import { toast } from "sonner";
-import { getExpenses, createExpense, deleteExpense, Expense } from "@/lib/api/expenses";
-import { useToast } from "@/hooks/use-toast";
+
+interface Expense {
+  id: number;
+  category: string;
+  amount: number;
+  date: string;
+  note: string;
+}
 
 const categories = [
   { name: "Food", icon: Utensils, color: "bg-orange-100 text-orange-600" },
@@ -27,66 +32,42 @@ const categories = [
 ];
 
 const Expenses = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [expenses, setExpenses] = useState<Expense[]>([
+    { id: 1, category: "Food", amount: 150, date: "2025-01-06", note: "Lunch" },
+    { id: 2, category: "Transportation", amount: 80, date: "2025-01-05", note: "Jeep fare" },
+    { id: 3, category: "School", amount: 250, date: "2025-01-04", note: "School supplies" },
+  ]);
+  
   const [showForm, setShowForm] = useState(false);
   const [newExpense, setNewExpense] = useState({
     category: "Food",
     amount: "",
     note: "",
   });
-  const { toast: toastHook } = useToast();
 
-  useEffect(() => {
-    fetchExpenses();
-  }, []);
-
-  const fetchExpenses = async () => {
-    setLoading(true);
-    const response = await getExpenses();
-    if (response.success && response.expenses) {
-      setExpenses(response.expenses);
-    } else {
-      toastHook({
-        title: "Error",
-        description: response.message || "Failed to load expenses",
-        variant: "destructive",
-      });
-    }
-    setLoading(false);
-  };
-
-  const handleAddExpense = async () => {
+  const handleAddExpense = () => {
     if (!newExpense.amount || parseFloat(newExpense.amount) <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
 
-    const response = await createExpense({
+    const expense: Expense = {
+      id: Date.now(),
       category: newExpense.category,
       amount: parseFloat(newExpense.amount),
       date: new Date().toISOString().split('T')[0],
       note: newExpense.note || "",
-    });
+    };
 
-    if (response.success) {
-      setNewExpense({ category: "Food", amount: "", note: "" });
-      setShowForm(false);
-      toast.success("Expense added successfully!");
-      await fetchExpenses();
-    } else {
-      toast.error(response.message || "Failed to add expense");
-    }
+    setExpenses([expense, ...expenses]);
+    setNewExpense({ category: "Food", amount: "", note: "" });
+    setShowForm(false);
+    toast.success("Expense added successfully!");
   };
 
-  const handleDeleteExpense = async (id: number) => {
-    const response = await deleteExpense(id);
-    if (response.success) {
-      toast.success("Expense deleted");
-      await fetchExpenses();
-    } else {
-      toast.error(response.message || "Failed to delete expense");
-    }
+  const handleDeleteExpense = (id: number) => {
+    setExpenses(expenses.filter((e) => e.id !== id));
+    toast.success("Expense deleted");
   };
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -101,10 +82,10 @@ const Expenses = () => {
       <div className="max-w-4xl mx-auto">
 
         {/* Summary Card */}
-        <div className="rounded-2xl bg-warning p-6 mb-6 text-foreground">
-          <p className="text-sm mb-1 font-medium opacity-90">Total Expenses</p>
+        <div className="rounded-2xl bg-gradient-warning p-6 text-white mb-6">
+          <p className="text-white/80 text-sm mb-1">Total Expenses</p>
           <p className="text-3xl font-bold">₱{totalExpenses.toLocaleString()}</p>
-          <p className="text-sm mt-1 opacity-80">{expenses.length} transactions</p>
+          <p className="text-white/70 text-sm mt-1">{expenses.length} transactions</p>
         </div>
 
         {/* Add Expense Button */}
@@ -179,12 +160,7 @@ const Expenses = () => {
         <div className="rounded-2xl border border-border bg-card p-6">
           <h3 className="font-semibold text-foreground mb-4">Expense History</h3>
           
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
-              <span className="text-muted-foreground">Loading expenses...</span>
-            </div>
-          ) : expenses.length === 0 ? (
+          {expenses.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">No expenses yet. Start tracking!</p>
           ) : (
             <div className="space-y-3">

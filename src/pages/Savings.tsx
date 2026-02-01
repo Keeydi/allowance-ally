@@ -1,92 +1,71 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, PiggyBank, Target, Trash2, TrendingUp, Loader2 } from "lucide-react";
+import { Plus, PiggyBank, Target, Trash2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
-import { getSavingsGoals, createSavingsGoal, updateSavingsGoal, deleteSavingsGoal, SavingsGoal } from "@/lib/api/savings";
-import { useToast } from "@/hooks/use-toast";
+
+interface SavingsGoal {
+  id: number;
+  name: string;
+  target: number;
+  current: number;
+  targetDate: string;
+}
 
 const Savings = () => {
-  const [goals, setGoals] = useState<SavingsGoal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [goals, setGoals] = useState<SavingsGoal[]>([
+    { id: 1, name: "New Backpack", target: 1500, current: 850, targetDate: "2025-03-01" },
+    { id: 2, name: "Emergency Fund", target: 5000, current: 2000, targetDate: "2025-06-01" },
+  ]);
+  
   const [showForm, setShowForm] = useState(false);
   const [newGoal, setNewGoal] = useState({
     name: "",
     target: "",
     targetDate: "",
   });
+
   const [addToGoal, setAddToGoal] = useState<{ id: number; amount: string } | null>(null);
-  const { toast: toastHook } = useToast();
 
-  useEffect(() => {
-    fetchGoals();
-  }, []);
-
-  const fetchGoals = async () => {
-    setLoading(true);
-    const response = await getSavingsGoals();
-    if (response.success && response.goals) {
-      setGoals(response.goals);
-    } else {
-      toastHook({
-        title: "Error",
-        description: response.message || "Failed to load savings goals",
-        variant: "destructive",
-      });
-    }
-    setLoading(false);
-  };
-
-  const handleCreateGoal = async () => {
+  const handleCreateGoal = () => {
     if (!newGoal.name || !newGoal.target || parseFloat(newGoal.target) <= 0) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    const response = await createSavingsGoal({
+    const goal: SavingsGoal = {
+      id: Date.now(),
       name: newGoal.name,
       target: parseFloat(newGoal.target),
-      targetDate: newGoal.targetDate || undefined,
-    });
+      current: 0,
+      targetDate: newGoal.targetDate || "",
+    };
 
-    if (response.success) {
-      setNewGoal({ name: "", target: "", targetDate: "" });
-      setShowForm(false);
-      toast.success("Savings goal created!");
-      await fetchGoals();
-    } else {
-      toast.error(response.message || "Failed to create goal");
-    }
+    setGoals([...goals, goal]);
+    setNewGoal({ name: "", target: "", targetDate: "" });
+    setShowForm(false);
+    toast.success("Savings goal created!");
   };
 
-  const handleAddSavings = async (goalId: number) => {
+  const handleAddSavings = (goalId: number) => {
     if (!addToGoal || !addToGoal.amount || parseFloat(addToGoal.amount) <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
 
-    const response = await updateSavingsGoal(goalId, {
-      amount: parseFloat(addToGoal.amount),
-    });
-
-    if (response.success) {
-      setAddToGoal(null);
-      toast.success("Savings added!");
-      await fetchGoals();
-    } else {
-      toast.error(response.message || "Failed to add savings");
-    }
+    setGoals(goals.map((g) =>
+      g.id === goalId
+        ? { ...g, current: g.current + parseFloat(addToGoal.amount) }
+        : g
+    ));
+    setAddToGoal(null);
+    toast.success("Savings added!");
   };
 
-  const handleDeleteGoal = async (id: number) => {
-    const response = await deleteSavingsGoal(id);
-    if (response.success) {
-      toast.success("Goal deleted");
-      await fetchGoals();
-    } else {
-      toast.error(response.message || "Failed to delete goal");
-    }
+  const handleDeleteGoal = (id: number) => {
+    setGoals(goals.filter((g) => g.id !== id));
+    toast.success("Goal deleted");
   };
 
   const totalSaved = goals.reduce((sum, g) => sum + g.current, 0);
@@ -177,12 +156,7 @@ const Savings = () => {
 
         {/* Goals List */}
         <div className="space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-              <span className="text-muted-foreground">Loading savings goals...</span>
-            </div>
-          ) : goals.length === 0 ? (
+          {goals.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-8 text-center">
               <PiggyBank className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">No savings goals yet. Create one to get started!</p>

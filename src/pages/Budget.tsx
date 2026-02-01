@@ -1,19 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check, Loader2 } from "lucide-react";
+import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check } from "lucide-react";
 import { toast } from "sonner";
-import { getBudget, updateBudget, Budget } from "@/lib/api/budget";
-import { useToast } from "@/hooks/use-toast";
 
 interface BudgetCategory {
   id: string;
@@ -25,133 +16,41 @@ interface BudgetCategory {
 }
 
 const Budget = () => {
-  const [budget, setBudget] = useState<Budget | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [totalAllowance, setTotalAllowance] = useState(2500);
   const [isEditingAllowance, setIsEditingAllowance] = useState(false);
-  const [tempAllowance, setTempAllowance] = useState("");
-  const { toast: toastHook } = useToast();
+  const [tempAllowance, setTempAllowance] = useState(totalAllowance.toString());
+  
+  const [categories, setCategories] = useState<BudgetCategory[]>([
+    { id: "needs", name: "Needs", icon: Wallet, allocation: 50, spent: 800, color: "bg-blue-500" },
+    { id: "wants", name: "Wants", icon: ShoppingBag, allocation: 30, spent: 450, color: "bg-pink-500" },
+    { id: "savings", name: "Savings", icon: PiggyBank, allocation: 20, spent: 200, color: "bg-success" },
+  ]);
 
-  useEffect(() => {
-    fetchBudget();
-  }, []);
-
-  const fetchBudget = async () => {
-    setLoading(true);
-    const response = await getBudget();
-    if (response.success && response.budget) {
-      setBudget(response.budget);
-      setTempAllowance(response.budget.totalAllowance.toString());
-    } else {
-      toastHook({
-        title: "Error",
-        description: response.message || "Failed to load budget",
-        variant: "destructive",
-      });
-    }
-    setLoading(false);
-  };
-
-  const handleSaveAllowance = async () => {
+  const handleSaveAllowance = () => {
     const value = parseFloat(tempAllowance);
-    if (value > 0 && budget) {
-      const response = await updateBudget({
-        totalAllowance: value,
-        periodType: budget.periodType || 'monthly',
-        needsAllocation: budget.needsAllocation,
-        wantsAllocation: budget.wantsAllocation,
-        savingsAllocation: budget.savingsAllocation,
-      });
-      
-      if (response.success && response.budget) {
-        setBudget(response.budget);
-        setIsEditingAllowance(false);
-        toast.success("Allowance updated!");
-      } else {
-        toast.error(response.message || "Failed to update allowance");
-      }
+    if (value > 0) {
+      setTotalAllowance(value);
+      setIsEditingAllowance(false);
+      toast.success("Allowance updated!");
     }
   };
 
-  const handlePeriodTypeChange = async (newPeriodType: 'daily' | 'weekly' | 'monthly') => {
-    if (!budget) return;
-
-    const response = await updateBudget({
-      totalAllowance: budget.totalAllowance,
-      periodType: newPeriodType,
-      needsAllocation: budget.needsAllocation,
-      wantsAllocation: budget.wantsAllocation,
-      savingsAllocation: budget.savingsAllocation,
-    });
+  const handleAllocationChange = (id: string, value: number) => {
+    const updated = categories.map((cat) =>
+      cat.id === id ? { ...cat, allocation: value } : cat
+    );
     
-    if (response.success && response.budget) {
-      setBudget(response.budget);
-      toast.success("Budget period updated!");
-    } else {
-      toast.error(response.message || "Failed to update budget period");
-    }
-  };
-
-  const handleAllocationChange = async (id: string, value: number) => {
-    if (!budget) return;
-
-    const updated = {
-      needsAllocation: id === "needs" ? value : budget.needsAllocation,
-      wantsAllocation: id === "wants" ? value : budget.wantsAllocation,
-      savingsAllocation: id === "savings" ? value : budget.savingsAllocation,
-    };
-    
-    const total = updated.needsAllocation + updated.wantsAllocation + updated.savingsAllocation;
+    const total = updated.reduce((sum, c) => sum + c.allocation, 0);
     if (total <= 100) {
-      const response = await updateBudget({
-        totalAllowance: budget.totalAllowance,
-        periodType: budget.periodType || 'monthly',
-        ...updated,
-      });
-      
-      if (response.success && response.budget) {
-        setBudget(response.budget);
-      } else {
-        toast.error(response.message || "Failed to update allocation");
-      }
+      setCategories(updated);
     } else {
       toast.error("Total allocation cannot exceed 100%");
     }
   };
 
-  if (loading) {
-    return (
-      <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-          <span className="text-muted-foreground">Loading budget...</span>
-        </div>
-      </UserLayout>
-    );
-  }
-
-  if (!budget) {
-    return (
-      <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Failed to load budget data</p>
-        </div>
-      </UserLayout>
-    );
-  }
-
-  const categories: BudgetCategory[] = [
-    { id: "needs", name: "Needs", icon: Wallet, allocation: budget.needsAllocation, spent: budget.needsSpent, color: "bg-blue-500" },
-    { id: "wants", name: "Wants", icon: ShoppingBag, allocation: budget.wantsAllocation, spent: budget.wantsSpent, color: "bg-pink-500" },
-    { id: "savings", name: "Savings", icon: PiggyBank, allocation: budget.savingsAllocation, spent: budget.savingsSpent, color: "bg-success" },
-  ];
-
   const totalAllocated = categories.reduce((sum, c) => sum + c.allocation, 0);
   const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
-  
-  // For daily budgets, use availableBudget (includes carryover), otherwise use totalAllowance
-  const availableBudget = budget.availableBudget ?? budget.totalAllowance;
-  const carryoverAmount = budget.carryoverAmount ?? 0;
-  const remaining = availableBudget - totalSpent;
+  const remaining = totalAllowance - totalSpent;
 
   return (
     <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
@@ -160,24 +59,7 @@ const Budget = () => {
         {/* Allowance Card */}
         <div className="rounded-2xl bg-gradient-primary p-6 text-primary-foreground mb-6">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <p className="text-primary-foreground/80 text-sm">
-                {budget.periodType === 'daily' ? 'Daily' : budget.periodType === 'weekly' ? 'Weekly' : 'Monthly'} Allowance
-              </p>
-              <Select
-                value={budget.periodType || 'monthly'}
-                onValueChange={(value) => handlePeriodTypeChange(value as 'daily' | 'weekly' | 'monthly')}
-              >
-                <SelectTrigger className="w-28 h-7 bg-white/10 border-white/20 text-white text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-primary-foreground/80 text-sm">Monthly Allowance</p>
             {!isEditingAllowance ? (
               <button
                 onClick={() => setIsEditingAllowance(true)}
@@ -204,14 +86,7 @@ const Budget = () => {
               autoFocus
             />
           ) : (
-            <div>
-              <p className="text-3xl font-bold">₱{availableBudget.toLocaleString()}</p>
-              {budget.periodType === 'daily' && carryoverAmount > 0 && (
-                <p className="text-sm text-primary-foreground/70 mt-1">
-                  Base: ₱{budget.totalAllowance.toLocaleString()} + Carryover: ₱{carryoverAmount.toLocaleString()}
-                </p>
-              )}
-            </div>
+            <p className="text-3xl font-bold">₱{totalAllowance.toLocaleString()}</p>
           )}
           
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/20">
@@ -249,8 +124,7 @@ const Budget = () => {
           {/* Category Cards */}
           <div className="space-y-4">
             {categories.map((cat) => {
-              // Use availableBudget for daily budgets (includes carryover), otherwise use totalAllowance
-              const budgetAmount = (availableBudget * cat.allocation) / 100;
+              const budgetAmount = (totalAllowance * cat.allocation) / 100;
               const spentPercent = Math.min((cat.spent / budgetAmount) * 100, 100);
               const isOverBudget = cat.spent > budgetAmount;
 
