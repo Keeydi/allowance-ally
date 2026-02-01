@@ -2,22 +2,11 @@ import { useState } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, PiggyBank, Target, Trash2, TrendingUp } from "lucide-react";
-import { toast } from "sonner";
-
-interface SavingsGoal {
-  id: number;
-  name: string;
-  target: number;
-  current: number;
-  targetDate: string;
-}
+import { Plus, PiggyBank, Target, Trash2, TrendingUp, Loader2 } from "lucide-react";
+import { useSavingsGoals } from "@/hooks/useSavingsGoals";
 
 const Savings = () => {
-  const [goals, setGoals] = useState<SavingsGoal[]>([
-    { id: 1, name: "New Backpack", target: 1500, current: 850, targetDate: "2025-03-01" },
-    { id: 2, name: "Emergency Fund", target: 5000, current: 2000, targetDate: "2025-06-01" },
-  ]);
+  const { goals, isLoading, addGoal, updateGoal, deleteGoal } = useSavingsGoals();
   
   const [showForm, setShowForm] = useState(false);
   const [newGoal, setNewGoal] = useState({
@@ -26,50 +15,52 @@ const Savings = () => {
     targetDate: "",
   });
 
-  const [addToGoal, setAddToGoal] = useState<{ id: number; amount: string } | null>(null);
+  const [addToGoal, setAddToGoal] = useState<{ id: string; amount: string } | null>(null);
 
   const handleCreateGoal = () => {
     if (!newGoal.name || !newGoal.target || parseFloat(newGoal.target) <= 0) {
-      toast.error("Please fill in all required fields");
       return;
     }
 
-    const goal: SavingsGoal = {
-      id: Date.now(),
+    addGoal.mutate({
       name: newGoal.name,
-      target: parseFloat(newGoal.target),
-      current: 0,
-      targetDate: newGoal.targetDate || "",
-    };
-
-    setGoals([...goals, goal]);
+      target_amount: parseFloat(newGoal.target),
+      current_amount: 0,
+      deadline: newGoal.targetDate || null,
+    });
+    
     setNewGoal({ name: "", target: "", targetDate: "" });
     setShowForm(false);
-    toast.success("Savings goal created!");
   };
 
-  const handleAddSavings = (goalId: number) => {
+  const handleAddSavings = (goalId: string, currentAmount: number) => {
     if (!addToGoal || !addToGoal.amount || parseFloat(addToGoal.amount) <= 0) {
-      toast.error("Please enter a valid amount");
       return;
     }
 
-    setGoals(goals.map((g) =>
-      g.id === goalId
-        ? { ...g, current: g.current + parseFloat(addToGoal.amount) }
-        : g
-    ));
+    updateGoal.mutate({
+      id: goalId,
+      current_amount: currentAmount + parseFloat(addToGoal.amount),
+    });
     setAddToGoal(null);
-    toast.success("Savings added!");
   };
 
-  const handleDeleteGoal = (id: number) => {
-    setGoals(goals.filter((g) => g.id !== id));
-    toast.success("Goal deleted");
+  const handleDeleteGoal = (id: string) => {
+    deleteGoal.mutate(id);
   };
 
-  const totalSaved = goals.reduce((sum, g) => sum + g.current, 0);
-  const totalTarget = goals.reduce((sum, g) => sum + g.target, 0);
+  const totalSaved = goals.reduce((sum, g) => sum + Number(g.current_amount), 0);
+  const totalTarget = goals.reduce((sum, g) => sum + Number(g.target_amount), 0);
+
+  if (isLoading) {
+    return (
+      <UserLayout title="Savings Goals" subtitle="Build your future, one peso at a time">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </UserLayout>
+    );
+  }
 
   return (
     <UserLayout title="Savings Goals" subtitle="Build your future, one peso at a time">
@@ -146,8 +137,13 @@ const Savings = () => {
                 <Button variant="outline" onClick={() => setShowForm(false)} className="flex-1">
                   Cancel
                 </Button>
-                <Button onClick={handleCreateGoal} className="flex-1" variant="cta">
-                  Create Goal
+                <Button 
+                  onClick={handleCreateGoal} 
+                  className="flex-1" 
+                  variant="cta"
+                  disabled={addGoal.isPending}
+                >
+                  {addGoal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Goal"}
                 </Button>
               </div>
             </div>
@@ -163,8 +159,10 @@ const Savings = () => {
             </div>
           ) : (
             goals.map((goal) => {
-              const progress = Math.min((goal.current / goal.target) * 100, 100);
-              const isComplete = goal.current >= goal.target;
+              const current = Number(goal.current_amount);
+              const target = Number(goal.target_amount);
+              const progress = Math.min((current / target) * 100, 100);
+              const isComplete = current >= target;
 
               return (
                 <div
@@ -183,15 +181,16 @@ const Savings = () => {
                           </span>
                         )}
                       </h4>
-                      {goal.targetDate && (
+                      {goal.deadline && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Target: {new Date(goal.targetDate).toLocaleDateString()}
+                          Target: {new Date(goal.deadline).toLocaleDateString()}
                         </p>
                       )}
                     </div>
                     <button
                       onClick={() => handleDeleteGoal(goal.id)}
                       className="p-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+                      disabled={deleteGoal.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -229,13 +228,13 @@ const Savings = () => {
                     
                     <div className="flex-1">
                       <p className="text-2xl font-bold text-foreground">
-                        ₱{goal.current.toLocaleString()}
+                        ₱{current.toLocaleString()}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        of ₱{goal.target.toLocaleString()} goal
+                        of ₱{target.toLocaleString()} goal
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        ₱{(goal.target - goal.current).toLocaleString()} to go
+                        ₱{(target - current).toLocaleString()} to go
                       </p>
                     </div>
                   </div>
@@ -256,8 +255,12 @@ const Savings = () => {
                           <Button variant="outline" onClick={() => setAddToGoal(null)}>
                             Cancel
                           </Button>
-                          <Button onClick={() => handleAddSavings(goal.id)} variant="cta">
-                            Add
+                          <Button 
+                            onClick={() => handleAddSavings(goal.id, current)} 
+                            variant="cta"
+                            disabled={updateGoal.isPending}
+                          >
+                            {updateGoal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
                           </Button>
                         </div>
                       ) : (

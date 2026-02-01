@@ -1,27 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Play, Video } from "lucide-react";
+import { Play, Video, Loader2 } from "lucide-react";
 import { UserLayout } from "@/components/layout/UserLayout";
-import type { VideoTip } from "./admin/AdminVideoTips";
+import { useVideoTips } from "@/hooks/useVideoTips";
 
 const VideoTips = () => {
-  const [videos, setVideos] = useState<VideoTip[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState<VideoTip | null>(null);
+  const { videos, isLoading } = useVideoTips();
+  const [selectedVideo, setSelectedVideo] = useState<typeof videos[0] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("videoTips");
-    if (stored) {
-      setVideos(JSON.parse(stored));
-    }
-  }, []);
 
   const categories = ["All", ...Array.from(new Set(videos.map((v) => v.category)))];
   
   const filteredVideos = selectedCategory === "All" 
     ? videos 
     : videos.filter((v) => v.category === selectedCategory);
+
+  if (isLoading) {
+    return (
+      <UserLayout title="Video Tips" subtitle="Learn budgeting and savings tips from our curated videos">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </UserLayout>
+    );
+  }
 
   return (
     <UserLayout title="Video Tips" subtitle="Learn budgeting and savings tips from our curated videos">
@@ -95,7 +98,7 @@ const VideoTips = () => {
               <div className="aspect-video rounded-lg overflow-hidden bg-black">
                 {selectedVideo && (
                   <iframe
-                    src={selectedVideo.videoUrl}
+                    src={selectedVideo.video_url}
                     title={selectedVideo.title}
                     className="w-full h-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

@@ -10,17 +10,10 @@ import {
   BookOpen,
   PiggyBank,
   ShoppingBag,
-  MoreHorizontal
+  MoreHorizontal,
+  Loader2
 } from "lucide-react";
-import { toast } from "sonner";
-
-interface Expense {
-  id: number;
-  category: string;
-  amount: number;
-  date: string;
-  note: string;
-}
+import { useExpenses } from "@/hooks/useExpenses";
 
 const categories = [
   { name: "Food", icon: Utensils, color: "bg-orange-100 text-orange-600" },
@@ -32,11 +25,7 @@ const categories = [
 ];
 
 const Expenses = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([
-    { id: 1, category: "Food", amount: 150, date: "2025-01-06", note: "Lunch" },
-    { id: 2, category: "Transportation", amount: 80, date: "2025-01-05", note: "Jeep fare" },
-    { id: 3, category: "School", amount: 250, date: "2025-01-04", note: "School supplies" },
-  ]);
+  const { expenses, isLoading, addExpense, deleteExpense } = useExpenses();
   
   const [showForm, setShowForm] = useState(false);
   const [newExpense, setNewExpense] = useState({
@@ -47,35 +36,40 @@ const Expenses = () => {
 
   const handleAddExpense = () => {
     if (!newExpense.amount || parseFloat(newExpense.amount) <= 0) {
-      toast.error("Please enter a valid amount");
       return;
     }
 
-    const expense: Expense = {
-      id: Date.now(),
+    addExpense.mutate({
       category: newExpense.category,
       amount: parseFloat(newExpense.amount),
+      description: newExpense.note || newExpense.category,
       date: new Date().toISOString().split('T')[0],
-      note: newExpense.note || "",
-    };
-
-    setExpenses([expense, ...expenses]);
+    });
+    
     setNewExpense({ category: "Food", amount: "", note: "" });
     setShowForm(false);
-    toast.success("Expense added successfully!");
   };
 
-  const handleDeleteExpense = (id: number) => {
-    setExpenses(expenses.filter((e) => e.id !== id));
-    toast.success("Expense deleted");
+  const handleDeleteExpense = (id: string) => {
+    deleteExpense.mutate(id);
   };
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
   const getCategoryIcon = (categoryName: string) => {
     const cat = categories.find((c) => c.name === categoryName);
     return cat || categories[5];
   };
+
+  if (isLoading) {
+    return (
+      <UserLayout title="Expense Tracking" subtitle="Track where your money goes">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </UserLayout>
+    );
+  }
 
   return (
     <UserLayout title="Expense Tracking" subtitle="Track where your money goes">
@@ -148,8 +142,13 @@ const Expenses = () => {
                 <Button variant="outline" onClick={() => setShowForm(false)} className="flex-1">
                   Cancel
                 </Button>
-                <Button onClick={handleAddExpense} className="flex-1" variant="cta">
-                  Add Expense
+                <Button 
+                  onClick={handleAddExpense} 
+                  className="flex-1" 
+                  variant="cta"
+                  disabled={addExpense.isPending}
+                >
+                  {addExpense.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add Expense"}
                 </Button>
               </div>
             </div>
@@ -178,15 +177,16 @@ const Expenses = () => {
                       <div>
                         <p className="font-medium text-foreground">{expense.category}</p>
                         <p className="text-xs text-muted-foreground">
-                          {expense.note || expense.date}
+                          {expense.description || expense.date}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-semibold text-foreground">-₱{expense.amount}</span>
+                      <span className="font-semibold text-foreground">-₱{Number(expense.amount).toLocaleString()}</span>
                       <button
                         onClick={() => handleDeleteExpense(expense.id)}
                         className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-destructive/10 text-destructive transition-all"
+                        disabled={deleteExpense.isPending}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

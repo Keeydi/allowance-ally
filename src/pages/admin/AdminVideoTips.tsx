@@ -1,74 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, Video } from "lucide-react";
+import { Plus, Edit, Trash2, Video, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
-
-export interface VideoTip {
-  id: string;
-  title: string;
-  description: string;
-  videoUrl: string;
-  thumbnail: string;
-  category: string;
-  createdAt: string;
-}
-
-const defaultVideos: VideoTip[] = [
-  {
-    id: "1",
-    title: "50/30/20 Budgeting Rule Explained",
-    description: "Learn the popular 50/30/20 budgeting method to manage your money effectively.",
-    videoUrl: "https://www.youtube.com/embed/HQzoZfc3GwQ",
-    thumbnail: "https://img.youtube.com/vi/HQzoZfc3GwQ/maxresdefault.jpg",
-    category: "Budgeting",
-    createdAt: "2025-01-05",
-  },
-  {
-    id: "2",
-    title: "How to Start an Emergency Fund",
-    description: "Essential tips for building your emergency savings from scratch.",
-    videoUrl: "https://www.youtube.com/embed/fVToMS2Q3XQ",
-    thumbnail: "https://img.youtube.com/vi/fVToMS2Q3XQ/maxresdefault.jpg",
-    category: "Savings",
-    createdAt: "2025-01-08",
-  },
-  {
-    id: "3",
-    title: "Track Your Daily Expenses",
-    description: "Simple methods to track and reduce your daily spending habits.",
-    videoUrl: "https://www.youtube.com/embed/sVKQn2I4HDM",
-    thumbnail: "https://img.youtube.com/vi/sVKQn2I4HDM/maxresdefault.jpg",
-    category: "Expenses",
-    createdAt: "2025-01-10",
-  },
-];
+import { useVideoTips } from "@/hooks/useVideoTips";
 
 const AdminVideoTips = () => {
-  const [videos, setVideos] = useState<VideoTip[]>([]);
+  const { videos, isLoading, addVideo, updateVideo, deleteVideo } = useVideoTips();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingVideo, setEditingVideo] = useState<VideoTip | null>(null);
+  const [editingVideo, setEditingVideo] = useState<typeof videos[0] | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     videoUrl: "",
     category: "",
   });
-
-  useEffect(() => {
-    const stored = localStorage.getItem("videoTips");
-    if (stored) {
-      setVideos(JSON.parse(stored));
-    } else {
-      setVideos(defaultVideos);
-      localStorage.setItem("videoTips", JSON.stringify(defaultVideos));
-    }
-  }, []);
 
   const extractVideoId = (url: string) => {
     const match = url.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^&\s]+)/);
@@ -80,29 +30,25 @@ const AdminVideoTips = () => {
     
     const videoId = extractVideoId(formData.videoUrl);
     const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : formData.videoUrl;
-    const thumbnail = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : "";
+    const thumbnail = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
 
     if (editingVideo) {
-      const updated = videos.map((v) =>
-        v.id === editingVideo.id
-          ? { ...v, ...formData, videoUrl: embedUrl, thumbnail }
-          : v
-      );
-      setVideos(updated);
-      localStorage.setItem("videoTips", JSON.stringify(updated));
-      toast({ title: "Video updated successfully!" });
-    } else {
-      const newVideo: VideoTip = {
-        id: Date.now().toString(),
-        ...formData,
-        videoUrl: embedUrl,
+      updateVideo.mutate({
+        id: editingVideo.id,
+        title: formData.title,
+        description: formData.description,
+        video_url: embedUrl,
         thumbnail,
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      const updated = [...videos, newVideo];
-      setVideos(updated);
-      localStorage.setItem("videoTips", JSON.stringify(updated));
-      toast({ title: "Video added successfully!" });
+        category: formData.category,
+      });
+    } else {
+      addVideo.mutate({
+        title: formData.title,
+        description: formData.description,
+        video_url: embedUrl,
+        thumbnail,
+        category: formData.category,
+      });
     }
 
     setFormData({ title: "", description: "", videoUrl: "", category: "" });
@@ -110,23 +56,28 @@ const AdminVideoTips = () => {
     setIsDialogOpen(false);
   };
 
-  const handleEdit = (video: VideoTip) => {
+  const handleEdit = (video: typeof videos[0]) => {
     setEditingVideo(video);
     setFormData({
       title: video.title,
-      description: video.description,
-      videoUrl: video.videoUrl,
+      description: video.description || "",
+      videoUrl: video.video_url,
       category: video.category,
     });
     setIsDialogOpen(true);
   };
 
   const handleDelete = (id: string) => {
-    const updated = videos.filter((v) => v.id !== id);
-    setVideos(updated);
-    localStorage.setItem("videoTips", JSON.stringify(updated));
-    toast({ title: "Video deleted successfully!" });
+    deleteVideo.mutate(id);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -142,7 +93,7 @@ const AdminVideoTips = () => {
             <Link to="/admin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
             <Link to="/admin/users" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Users</Link>
             <Link to="/admin/video-tips" className="text-sm font-medium text-foreground">Video Tips</Link>
-            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
+            <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
           </nav>
         </div>
       </header>
@@ -202,11 +153,20 @@ const AdminVideoTips = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Brief description of the video"
-                    required
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  {editingVideo ? "Update Video" : "Add Video"}
+                <Button 
+                  type="submit" 
+                  className="w-full"
+                  disabled={addVideo.isPending || updateVideo.isPending}
+                >
+                  {(addVideo.isPending || updateVideo.isPending) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : editingVideo ? (
+                    "Update Video"
+                  ) : (
+                    "Add Video"
+                  )}
                 </Button>
               </form>
             </DialogContent>
@@ -228,7 +188,12 @@ const AdminVideoTips = () => {
                   <Button size="sm" variant="secondary" onClick={() => handleEdit(video)}>
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(video.id)}>
+                  <Button 
+                    size="sm" 
+                    variant="destructive" 
+                    onClick={() => handleDelete(video.id)}
+                    disabled={deleteVideo.isPending}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -236,7 +201,7 @@ const AdminVideoTips = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">{video.category}</span>
-                  <span className="text-xs text-muted-foreground">{video.createdAt}</span>
+                  <span className="text-xs text-muted-foreground">{new Date(video.created_at).toLocaleDateString()}</span>
                 </div>
                 <CardTitle className="text-base line-clamp-2">{video.title}</CardTitle>
               </CardHeader>
