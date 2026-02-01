@@ -7,16 +7,15 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 
-// CORS: allow Vercel frontend and local dev; required for preflight from allowance-ally.vercel.app
+// CORS - single middleware (Vercel + local dev)
 const allowedOrigins = [
   'https://allowance-ally.vercel.app',
   'https://www.allowance-ally.vercel.app',
-  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/,  // *.vercel.app (preview deployments)
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/,
   'http://localhost:5173',
   'http://localhost:8080',
   'http://127.0.0.1:5173',
@@ -25,35 +24,19 @@ const allowedOrigins = [
 if (process.env.CORS_ORIGIN) {
   allowedOrigins.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()));
 }
+const isOriginAllowed = (origin) =>
+  !origin || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin));
 
-function isOriginAllowed(origin) {
-  if (!origin) return true;
-  return allowedOrigins.some(o =>
-    typeof o === 'string' ? o === origin : o.test(origin)
-  );
-}
-
-// Handle preflight (OPTIONS) explicitly so CORS headers are always sent
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin && isOriginAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+app.use((req, res, next) => {
+  if (req.headers.origin && isOriginAllowed(req.headers.origin)) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
   res.setHeader('Access-Control-Max-Age', '86400');
-  res.sendStatus(204);
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
 });
-
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    cb(null, isOriginAllowed(origin) ? origin : false);
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  optionsSuccessStatus: 204,
-}));
 
 app.use(express.json());
 
@@ -107,6 +90,16 @@ const processYouTubeUrl = (videoUrl) => {
     thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : ''
   };
 };
+
+const formatVideo = (row) => ({
+  id: row.id.toString(),
+  title: row.title,
+  description: row.description || '',
+  videoUrl: row.video_url || row.videoUrl,
+  thumbnail: row.thumbnail_url || row.thumbnail || '',
+  category: row.category,
+  createdAt: formatDate(row.created_at || row.createdAt)
+});
 
 /**
  * Format date to YYYY-MM-DD
@@ -300,16 +293,12 @@ const findOrCreateUserFromSupabase = async (payload) => {
     'SELECT id, email, role, first_name, last_name FROM users WHERE supabase_id = ? AND is_active = TRUE',
     [sub]
   );
-
-  if (existing.length > 0) {
-    return existing[0];
-  }
+  if (existing.length > 0) return existing[0];
 
   const [insertResult] = await pool.execute(
     'INSERT INTO users (supabase_id, email, password, role, first_name, last_name) VALUES (?, ?, NULL, 0, ?, ?)',
     [sub, email, firstName, lastName]
   );
-
   const [newUser] = await pool.execute(
     'SELECT id, email, role, first_name, last_name FROM users WHERE id = ?',
     [insertResult.insertId]
@@ -317,49 +306,38 @@ const findOrCreateUserFromSupabase = async (payload) => {
   return newUser[0] || null;
 };
 
+/** Resolve Bearer token to user (our JWT or Supabase JWT). Returns user row or null. */
+const resolveTokenToUser = async (token) => {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const [users] = await pool.execute(
+      'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
+      [decoded.id]
+    );
+    if (users.length > 0) return users[0];
+  } catch (_) {}
+
+  const supabasePayload = verifySupabaseToken(token);
+  if (supabasePayload) return findOrCreateUserFromSupabase(supabasePayload);
+  return null;
+};
+
 // ============================================================================
 // MIDDLEWARE
 // ============================================================================
 
-/**
- * Verify JWT token (our JWT or Supabase JWT) and attach user to request
- */
 const verifyToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return sendError(res, 401, 'No token provided');
-    }
+    if (!authHeader?.startsWith('Bearer ')) return sendError(res, 401, 'No token provided');
 
-    const token = authHeader.substring(7);
-
-    // Try our own JWT first
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      const [users] = await pool.execute(
-        'SELECT id, role FROM users WHERE id = ? AND is_active = TRUE',
-        [decoded.id]
-      );
-      if (users.length > 0) {
-        req.user = users[0];
-        return next();
-      }
-    } catch (_) {}
-
-    // Try Supabase JWT
-    const supabasePayload = verifySupabaseToken(token);
-    if (supabasePayload) {
-      const user = await findOrCreateUserFromSupabase(supabasePayload);
-      if (user) {
-        req.user = { id: user.id, role: user.role };
-        return next();
-      }
-    }
-
-    return sendError(res, 401, 'Invalid or expired token');
-  } catch (error) {
-    console.error('Token verification error:', error);
-    return sendError(res, 500, 'Internal server error');
+    const user = await resolveTokenToUser(authHeader.substring(7));
+    if (!user) return sendError(res, 401, 'Invalid or expired token');
+    req.user = user;
+    next();
+  } catch (err) {
+    console.error('Token verification error:', err);
+    sendError(res, 500, 'Internal server error');
   }
 };
 
@@ -472,67 +450,21 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
 
 app.get('/api/auth/verify', asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ valid: false, message: 'No token provided' });
   }
-  const token = authHeader.substring(7);
-
-  // Try our JWT
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
-      [decoded.id]
-    );
-    if (users.length > 0) {
-      return res.json({ valid: true, user: users[0] });
-    }
-  } catch (_) {}
-
-  // Try Supabase JWT
-  const supabasePayload = verifySupabaseToken(token);
-  if (supabasePayload) {
-    const user = await findOrCreateUserFromSupabase(supabasePayload);
-    if (user) {
-      return res.json({ valid: true, user });
-    }
-  }
-
-  return res.status(401).json({ valid: false, message: 'Invalid or expired token' });
+  const user = await resolveTokenToUser(authHeader.substring(7));
+  if (!user) return res.status(401).json({ valid: false, message: 'Invalid or expired token' });
+  res.json({ valid: true, user });
 }));
 
-/**
- * GET /api/auth/me - Return current app user (used after Supabase login to sync to MySQL)
- * Accepts Bearer token (Supabase access_token or our JWT). Creates MySQL user on first Supabase login.
- */
 app.get('/api/auth/me', asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'No token provided' });
   }
-  const token = authHeader.substring(7);
-
-  // Try our JWT
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name FROM users WHERE id = ? AND is_active = TRUE',
-      [decoded.id]
-    );
-    if (users.length > 0) {
-      return res.json({ user: users[0] });
-    }
-  } catch (_) {}
-
-  // Try Supabase JWT and find or create user
-  const supabasePayload = verifySupabaseToken(token);
-  if (!supabasePayload) {
-    return res.status(401).json({ message: 'Invalid or expired token' });
-  }
-  const user = await findOrCreateUserFromSupabase(supabasePayload);
-  if (!user) {
-    return res.status(500).json({ message: 'Failed to sync user' });
-  }
+  const user = await resolveTokenToUser(authHeader.substring(7));
+  if (!user) return res.status(401).json({ message: 'Invalid or expired token' });
   res.json({ user });
 }));
 
@@ -565,23 +497,9 @@ app.get('/api/admin/users', verifyToken, verifyAdmin, asyncHandler(async (req, r
 
 app.get('/api/admin/video-tips', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
   const [videos] = await pool.execute(
-    `SELECT id, title, description, video_url as videoUrl, thumbnail_url as thumbnail, 
-            category, created_at as createdAt, is_active
-     FROM video_tips 
-     ORDER BY created_at DESC`
+    'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips ORDER BY created_at DESC'
   );
-
-  const formattedVideos = videos.map(video => ({
-    id: video.id.toString(),
-    title: video.title,
-    description: video.description || '',
-    videoUrl: video.videoUrl,
-    thumbnail: video.thumbnail || '',
-    category: video.category,
-    createdAt: formatDate(video.createdAt)
-  }));
-
-  res.json({ success: true, videos: formattedVideos });
+  res.json({ success: true, videos: videos.map(formatVideo) });
 }));
 
 app.post('/api/admin/video-tips', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
@@ -599,24 +517,10 @@ app.post('/api/admin/video-tips', verifyToken, verifyAdmin, asyncHandler(async (
   );
 
   const [newVideo] = await pool.execute(
-    `SELECT id, title, description, video_url as videoUrl, thumbnail_url as thumbnail, 
-            category, created_at as createdAt
-     FROM video_tips WHERE id = ?`,
+    'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips WHERE id = ?',
     [result.insertId]
   );
-
-  res.status(201).json({
-    success: true,
-    video: {
-      id: newVideo[0].id.toString(),
-      title: newVideo[0].title,
-      description: newVideo[0].description || '',
-      videoUrl: newVideo[0].videoUrl,
-      thumbnail: newVideo[0].thumbnail || '',
-      category: newVideo[0].category,
-      createdAt: formatDate(newVideo[0].createdAt)
-    }
-  });
+  res.status(201).json({ success: true, video: formatVideo(newVideo[0]) });
 }));
 
 app.put('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
@@ -635,28 +539,11 @@ app.put('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(asyn
   );
 
   const [updatedVideo] = await pool.execute(
-    `SELECT id, title, description, video_url as videoUrl, thumbnail_url as thumbnail, 
-            category, created_at as createdAt
-     FROM video_tips WHERE id = ?`,
+    'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips WHERE id = ?',
     [id]
   );
-
-  if (updatedVideo.length === 0) {
-    return sendError(res, 404, 'Video tip not found');
-  }
-
-  res.json({
-    success: true,
-    video: {
-      id: updatedVideo[0].id.toString(),
-      title: updatedVideo[0].title,
-      description: updatedVideo[0].description || '',
-      videoUrl: updatedVideo[0].videoUrl,
-      thumbnail: updatedVideo[0].thumbnail || '',
-      category: updatedVideo[0].category,
-      createdAt: formatDate(updatedVideo[0].createdAt)
-    }
-  });
+  if (updatedVideo.length === 0) return sendError(res, 404, 'Video tip not found');
+  res.json({ success: true, video: formatVideo(updatedVideo[0]) });
 }));
 
 app.delete('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(async (req, res) => {
@@ -676,24 +563,9 @@ app.delete('/api/admin/video-tips/:id', verifyToken, verifyAdmin, asyncHandler(a
 
 app.get('/api/video-tips', asyncHandler(async (req, res) => {
   const [videos] = await pool.execute(
-    `SELECT id, title, description, video_url as videoUrl, thumbnail_url as thumbnail, 
-            category, created_at as createdAt
-     FROM video_tips 
-     WHERE is_active = TRUE 
-     ORDER BY created_at DESC`
+    'SELECT id, title, description, video_url, thumbnail_url, category, created_at FROM video_tips WHERE is_active = TRUE ORDER BY created_at DESC'
   );
-
-  const formattedVideos = videos.map(video => ({
-    id: video.id.toString(),
-    title: video.title,
-    description: video.description || '',
-    videoUrl: video.videoUrl,
-    thumbnail: video.thumbnail || '',
-    category: video.category,
-    createdAt: formatDate(video.createdAt)
-  }));
-
-  res.json({ success: true, videos: formattedVideos });
+  res.json({ success: true, videos: videos.map(formatVideo) });
 }));
 
 // ============================================================================
@@ -1427,38 +1299,5 @@ const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
   : `http://localhost:${PORT}`;
 
 app.listen(PORT, () => {
-  console.log('');
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║   Allowance Ally Backend API Server   ║');
-  console.log('╚════════════════════════════════════════╝');
-  console.log('');
-  console.log(`✓ Server running on port ${PORT}`);
-  console.log(`✓ API endpoints available at ${BASE_URL}/api`);
-  console.log('');
-  console.log('Available endpoints:');
-  console.log(`  POST   ${BASE_URL}/api/auth/login`);
-  console.log(`  POST   ${BASE_URL}/api/auth/register`);
-  console.log(`  GET    ${BASE_URL}/api/auth/verify`);
-  console.log(`  GET    ${BASE_URL}/api/video-tips (public)`);
-  console.log(`  GET    ${BASE_URL}/api/expenses (auth required)`);
-  console.log(`  POST   ${BASE_URL}/api/expenses (auth required)`);
-  console.log(`  DELETE ${BASE_URL}/api/expenses/:id (auth required)`);
-  console.log(`  GET    ${BASE_URL}/api/budget (auth required)`);
-  console.log(`  PUT    ${BASE_URL}/api/budget (auth required)`);
-  console.log(`  GET    ${BASE_URL}/api/savings-goals (auth required)`);
-  console.log(`  POST   ${BASE_URL}/api/savings-goals (auth required)`);
-  console.log(`  PUT    ${BASE_URL}/api/savings-goals/:id (auth required)`);
-  console.log(`  DELETE ${BASE_URL}/api/savings-goals/:id (auth required)`);
-  console.log(`  GET    ${BASE_URL}/api/reports (auth required)`);
-  console.log(`  GET    ${BASE_URL}/api/discipline (auth required)`);
-  console.log(`  GET    ${BASE_URL}/api/dashboard (auth required)`);
-  console.log(`  GET    ${BASE_URL}/api/admin/users (admin only)`);
-  console.log(`  GET    ${BASE_URL}/api/admin/video-tips (admin only)`);
-  console.log(`  POST   ${BASE_URL}/api/admin/video-tips (admin only)`);
-  console.log(`  PUT    ${BASE_URL}/api/admin/video-tips/:id (admin only)`);
-  console.log(`  DELETE ${BASE_URL}/api/admin/video-tips/:id (admin only)`);
-  console.log(`  GET    ${BASE_URL}/api/health`);
-  console.log('');
-  console.log('JWT Secret:', JWT_SECRET.substring(0, 20) + '...');
-  console.log('');
+  console.log(`Allowance Ally API running on ${BASE_URL}/api`);
 });
