@@ -42,21 +42,29 @@ function isOriginAllowed(origin) {
   return allowedOriginPatterns.some(re => re.test(origin));
 }
 
+// Dedicated OPTIONS (preflight) handler first – ensures CORS headers are always sent for preflight
+app.use((req, res, next) => {
+  if (req.method !== 'OPTIONS') return next();
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (origin && /^https:\/\/[^/]+\.vercel\.app$/i.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (process.env.CORS_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN.split(',')[0].trim());
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  return res.status(204).end();
+});
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (req.method === 'OPTIONS') {
-    if (origin && isOriginAllowed(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    } else if (process.env.CORS_ORIGIN) {
-      res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN.split(',')[0].trim());
-    }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    return res.sendStatus(204);
-  }
   if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (origin && /^https:\/\/[^/]+\.vercel\.app$/i.test(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (process.env.CORS_ORIGIN) {
     res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN.split(',')[0].trim());
@@ -71,6 +79,7 @@ app.use((req, res, next) => {
 app.use(compression());
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: false
 }));
 app.use(express.json({ limit: '100kb' }));
