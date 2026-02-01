@@ -7,15 +7,21 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const compression = require('compression');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
 
-// CORS - single middleware (Vercel + local dev)
+// CORS - Vercel, Fly.io, Railway, Render, Koyeb + local dev
 const allowedOrigins = [
   'https://allowance-ally.vercel.app',
   'https://www.allowance-ally.vercel.app',
   /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.fly\.dev$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.onrender\.com$/,
+  /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]*\.koyeb\.app$/,
   'http://localhost:5173',
   'http://localhost:8080',
   'http://127.0.0.1:5173',
@@ -38,7 +44,12 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(compression());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false
+}));
+app.use(express.json({ limit: '100kb' }));
 
 // Database connection pool
 const pool = mysql.createPool({
@@ -56,6 +67,9 @@ const pool = mysql.createPool({
 const JWT_SECRET = process.env.JWT_SECRET || '2788586556239fc3edf9bee4a806f67e';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('⚠ JWT_SECRET not set; using default. Set JWT_SECRET in production!');
+}
 
 // Test database connection
 pool.getConnection()
@@ -933,22 +947,26 @@ app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
 
   const weeklyData = [];
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - 6);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(now);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  const [weekExpenses] = await pool.execute(
+    `SELECT date, SUM(amount) as total FROM expenses 
+     WHERE user_id = ? AND date >= ? AND date <= ?
+     GROUP BY date`,
+    [req.user.id, formatDate(weekStart), formatDate(weekEnd)]
+  );
+  const dayTotals = new Map(weekExpenses.map(r => [formatDate(r.date), parseFloat(r.total || 0)]));
+
   for (let i = 6; i >= 0; i--) {
     const date = new Date(now);
     date.setDate(now.getDate() - i);
     date.setHours(0, 0, 0, 0);
-
-    const [dayExpenses] = await pool.execute(
-      `SELECT SUM(amount) as total 
-       FROM expenses 
-       WHERE user_id = ? AND date = ?`,
-      [req.user.id, formatDate(date)]
-    );
-
-    const spent = dayExpenses[0]?.total ? parseFloat(dayExpenses[0].total) : 0;
+    const spent = dayTotals.get(formatDate(date)) || 0;
     const dailyBudget = totalAllowance / 30;
-
     weeklyData.push({
       day: days[date.getDay()],
       spent: Math.round(spent),
@@ -977,26 +995,24 @@ app.get('/api/reports', verifyToken, asyncHandler(async (req, res) => {
 
   const monthlyData = [];
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
+  const fourMonthsStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+
+  const [allMonthExpenses] = await pool.execute(
+    `SELECT DATE_FORMAT(date, '%Y-%m') as month_key, SUM(amount) as total 
+     FROM expenses 
+     WHERE user_id = ? AND date >= ?
+     GROUP BY month_key`,
+    [req.user.id, formatDate(fourMonthsStart)]
+  );
+  const monthTotals = new Map(allMonthExpenses.map(r => [r.month_key, parseFloat(r.total || 0)]));
+
   for (let i = 3; i >= 0; i--) {
     const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-    monthEnd.setHours(23, 59, 59, 999);
-
-    const [monthExpenses] = await pool.execute(
-      `SELECT SUM(amount) as total 
-       FROM expenses 
-       WHERE user_id = ? AND date >= ? AND date <= ?`,
-      [req.user.id, formatDate(monthStart), formatDate(monthEnd)]
-    );
-
-    const expenses = monthExpenses[0]?.total ? parseFloat(monthExpenses[0].total) : 0;
-    const income = totalAllowance;
-
+    const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+    const expenses = monthTotals.get(monthKey) || 0;
     monthlyData.push({
       month: monthNames[monthDate.getMonth()],
-      income: Math.round(income),
+      income: Math.round(totalAllowance),
       expenses: Math.round(expenses)
     });
   }
@@ -1166,18 +1182,15 @@ app.get('/api/discipline', verifyToken, asyncHandler(async (req, res) => {
     score += 5;
   }
 
-  const daysWithExpenses = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(now.getDate() - i);
-    const [dayExpenses] = await pool.execute(
-      `SELECT COUNT(*) as count FROM expenses WHERE user_id = ? AND date = ?`,
-      [req.user.id, formatDate(date)]
-    );
-    if (dayExpenses[0].count > 0) {
-      daysWithExpenses.push(formatDate(date));
-    }
-  }
+  const weekStartD = new Date(now);
+  weekStartD.setDate(now.getDate() - 6);
+  weekStartD.setHours(0, 0, 0, 0);
+  const [daysWithData] = await pool.execute(
+    `SELECT DISTINCT date FROM expenses 
+     WHERE user_id = ? AND date >= ? AND date <= ?`,
+    [req.user.id, formatDate(weekStartD), formatDate(now)]
+  );
+  const daysWithExpenses = daysWithData.map(r => formatDate(r.date));
   
   const trackingDays = daysWithExpenses.length;
   if (trackingDays < 5) {
@@ -1288,6 +1301,31 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Allowance Ally API is running' });
 });
 
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: 'Not found' });
+});
+
+// ============================================================================
+// GRACEFUL SHUTDOWN
+// ============================================================================
+
+const shutdown = () => {
+  console.log('Shutting down gracefully...');
+  server.close(async () => {
+    try {
+      await pool.end();
+      console.log('Database pool closed');
+    } catch (err) {
+      console.error('Error closing pool:', err);
+    }
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
 // ============================================================================
 // START SERVER
 // ============================================================================
@@ -1298,6 +1336,6 @@ const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : `http://localhost:${PORT}`;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Allowance Ally API running on ${BASE_URL}/api`);
 });
