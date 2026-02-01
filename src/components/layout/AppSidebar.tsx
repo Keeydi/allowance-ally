@@ -8,10 +8,12 @@ import {
   MessageSquare, 
   Video,
   LogOut,
-  Wallet
+  Wallet,
+  Shield
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   Sidebar,
@@ -47,6 +49,13 @@ const resourceItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const { signOut, isAdmin, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
@@ -129,19 +138,47 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Admin Panel">
+                    <NavLink 
+                      to="/admin" 
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      activeClassName="bg-primary/10 text-primary font-medium"
+                    >
+                      <Shield className="h-5 w-5 shrink-0" />
+                      {!collapsed && <span>Admin Panel</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-4">
+        {!collapsed && user && (
+          <div className="px-3 py-2 mb-2">
+            <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+            <p className="text-xs text-muted-foreground">{isAdmin ? "Admin" : "User"}</p>
+          </div>
+        )}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Log Out">
-              <Link 
-                to="/" 
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors w-full"
               >
                 <LogOut className="h-5 w-5 shrink-0" />
                 {!collapsed && <span>Log Out</span>}
-              </Link>
+              </button>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
