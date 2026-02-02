@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export interface Budget {
   id: string;
@@ -31,38 +31,74 @@ export const useBudgets = () => {
     enabled: !!user,
   });
 
-  const addBudget = useMutation({
-    mutationFn: async (budget: Omit<Budget, "id" | "created_at" | "updated_at">) => {
+  // Get the allowance (stored as a special budget with category "allowance")
+  const allowance = budgets.find(b => b.category === "allowance")?.amount || 0;
+  
+  // Get category allocations (excluding allowance)
+  const allocations = budgets.filter(b => b.category !== "allowance");
+
+  const upsertBudget = useMutation({
+    mutationFn: async (budget: { category: string; amount: number; period?: string }) => {
       if (!user) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("budgets")
-        .insert({ ...budget, user_id: user.id })
-        .select()
-        .single();
       
-      if (error) throw error;
-      return data;
+      // Check if budget for this category already exists
+      const existing = budgets.find(b => b.category === budget.category);
+      
+      if (existing) {
+        const { error } = await supabase
+          .from("budgets")
+          .update({ amount: budget.amount, period: budget.period || "monthly" })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("budgets")
+          .insert({ 
+            ...budget, 
+            user_id: user.id,
+            period: budget.period || "monthly"
+          });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      toast({ title: "Budget added successfully!" });
     },
     onError: (error) => {
-      toast({ title: "Error adding budget", description: error.message, variant: "destructive" });
+      toast.error("Error saving budget: " + error.message);
     },
   });
 
-  const updateBudget = useMutation({
-    mutationFn: async ({ id, ...budget }: Partial<Budget> & { id: string }) => {
-      const { error } = await supabase.from("budgets").update(budget).eq("id", id);
-      if (error) throw error;
+  const setAllowance = useMutation({
+    mutationFn: async (amount: number) => {
+      if (!user) throw new Error("Not authenticated");
+      
+      const existing = budgets.find(b => b.category === "allowance");
+      
+      if (existing) {
+        const { error } = await supabase
+          .from("budgets")
+          .update({ amount })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("budgets")
+          .insert({ 
+            category: "allowance", 
+            amount, 
+            user_id: user.id,
+            period: "monthly"
+          });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      toast({ title: "Budget updated!" });
+      toast.success("Allowance updated!");
     },
     onError: (error) => {
-      toast({ title: "Error updating budget", description: error.message, variant: "destructive" });
+      toast.error("Error saving allowance: " + error.message);
     },
   });
 
@@ -73,12 +109,20 @@ export const useBudgets = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      toast({ title: "Budget deleted!" });
+      toast.success("Budget deleted!");
     },
     onError: (error) => {
-      toast({ title: "Error deleting budget", description: error.message, variant: "destructive" });
+      toast.error("Error deleting budget: " + error.message);
     },
   });
 
-  return { budgets, isLoading, addBudget, updateBudget, deleteBudget };
+  return { 
+    budgets, 
+    allocations,
+    allowance,
+    isLoading, 
+    upsertBudget, 
+    setAllowance,
+    deleteBudget 
+  };
 };

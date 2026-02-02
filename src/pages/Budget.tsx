@@ -1,37 +1,89 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check } from "lucide-react";
+import { Target, Wallet, ShoppingBag, PiggyBank, Edit2, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useBudgets } from "@/hooks/useBudgets";
+import { useExpenses } from "@/hooks/useExpenses";
 
 interface BudgetCategory {
   id: string;
   name: string;
   icon: any;
   allocation: number;
-  spent: number;
   color: string;
+  expenseCategories: string[]; // Which expense categories map to this budget category
 }
 
+const defaultCategories: BudgetCategory[] = [
+  { 
+    id: "needs", 
+    name: "Needs", 
+    icon: Wallet, 
+    allocation: 50, 
+    color: "bg-blue-500",
+    expenseCategories: ["Food", "Transportation", "School"]
+  },
+  { 
+    id: "wants", 
+    name: "Wants", 
+    icon: ShoppingBag, 
+    allocation: 30, 
+    color: "bg-pink-500",
+    expenseCategories: ["Wants", "Others"]
+  },
+  { 
+    id: "savings", 
+    name: "Savings", 
+    icon: PiggyBank, 
+    allocation: 20, 
+    color: "bg-success",
+    expenseCategories: ["Savings"]
+  },
+];
+
 const Budget = () => {
-  const [totalAllowance, setTotalAllowance] = useState(2500);
-  const [isEditingAllowance, setIsEditingAllowance] = useState(false);
-  const [tempAllowance, setTempAllowance] = useState(totalAllowance.toString());
+  const { allowance, allocations, isLoading: budgetsLoading, setAllowance, upsertBudget } = useBudgets();
+  const { expenses, isLoading: expensesLoading } = useExpenses();
   
-  const [categories, setCategories] = useState<BudgetCategory[]>([
-    { id: "needs", name: "Needs", icon: Wallet, allocation: 50, spent: 800, color: "bg-blue-500" },
-    { id: "wants", name: "Wants", icon: ShoppingBag, allocation: 30, spent: 450, color: "bg-pink-500" },
-    { id: "savings", name: "Savings", icon: PiggyBank, allocation: 20, spent: 200, color: "bg-success" },
-  ]);
+  const [isEditingAllowance, setIsEditingAllowance] = useState(false);
+  const [tempAllowance, setTempAllowance] = useState("");
+  
+  const [categories, setCategories] = useState<BudgetCategory[]>(defaultCategories);
+
+  // Initialize categories from database allocations
+  useEffect(() => {
+    if (allocations.length > 0) {
+      setCategories(prev => prev.map(cat => {
+        const dbAllocation = allocations.find(a => a.category === cat.id);
+        return dbAllocation ? { ...cat, allocation: dbAllocation.amount } : cat;
+      }));
+    }
+  }, [allocations]);
+
+  // Set tempAllowance when allowance loads
+  useEffect(() => {
+    if (allowance > 0) {
+      setTempAllowance(allowance.toString());
+    }
+  }, [allowance]);
+
+  // Calculate spent per category from actual expenses
+  const getSpentForCategory = (category: BudgetCategory): number => {
+    return expenses
+      .filter(e => category.expenseCategories.includes(e.category))
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+  };
 
   const handleSaveAllowance = () => {
     const value = parseFloat(tempAllowance);
     if (value > 0) {
-      setTotalAllowance(value);
+      setAllowance.mutate(value);
       setIsEditingAllowance(false);
-      toast.success("Allowance updated!");
+    } else {
+      toast.error("Please enter a valid amount");
     }
   };
 
@@ -43,14 +95,28 @@ const Budget = () => {
     const total = updated.reduce((sum, c) => sum + c.allocation, 0);
     if (total <= 100) {
       setCategories(updated);
+      // Save to database
+      upsertBudget.mutate({ category: id, amount: value });
     } else {
       toast.error("Total allocation cannot exceed 100%");
     }
   };
 
   const totalAllocated = categories.reduce((sum, c) => sum + c.allocation, 0);
-  const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
-  const remaining = totalAllowance - totalSpent;
+  const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const remaining = allowance - totalSpent;
+
+  const isLoading = budgetsLoading || expensesLoading;
+
+  if (isLoading) {
+    return (
+      <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </UserLayout>
+    );
+  }
 
   return (
     <UserLayout title="Budget Planning" subtitle="Allocate your money wisely">
@@ -62,7 +128,10 @@ const Budget = () => {
             <p className="text-primary-foreground/80 text-sm">Monthly Allowance</p>
             {!isEditingAllowance ? (
               <button
-                onClick={() => setIsEditingAllowance(true)}
+                onClick={() => {
+                  setTempAllowance(allowance.toString() || "");
+                  setIsEditingAllowance(true);
+                }}
                 className="p-2 rounded-lg hover:bg-white/10 transition-colors"
               >
                 <Edit2 className="h-4 w-4" />
@@ -71,8 +140,13 @@ const Budget = () => {
               <button
                 onClick={handleSaveAllowance}
                 className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                disabled={setAllowance.isPending}
               >
-                <Check className="h-4 w-4" />
+                {setAllowance.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
               </button>
             )}
           </div>
@@ -84,9 +158,12 @@ const Budget = () => {
               onChange={(e) => setTempAllowance(e.target.value)}
               className="text-3xl font-bold bg-white/10 border-white/20 text-white placeholder:text-white/50"
               autoFocus
+              onKeyDown={(e) => e.key === "Enter" && handleSaveAllowance()}
             />
           ) : (
-            <p className="text-3xl font-bold">₱{totalAllowance.toLocaleString()}</p>
+            <p className="text-3xl font-bold">
+              {allowance > 0 ? `₱${allowance.toLocaleString()}` : "Set your allowance →"}
+            </p>
           )}
           
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/20">
@@ -96,7 +173,9 @@ const Budget = () => {
             </div>
             <div className="text-right">
               <p className="text-primary-foreground/70 text-xs">Remaining</p>
-              <p className="font-semibold">₱{remaining.toLocaleString()}</p>
+              <p className={`font-semibold ${remaining < 0 ? "text-red-300" : ""}`}>
+                ₱{remaining.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
@@ -124,9 +203,10 @@ const Budget = () => {
           {/* Category Cards */}
           <div className="space-y-4">
             {categories.map((cat) => {
-              const budgetAmount = (totalAllowance * cat.allocation) / 100;
-              const spentPercent = Math.min((cat.spent / budgetAmount) * 100, 100);
-              const isOverBudget = cat.spent > budgetAmount;
+              const budgetAmount = allowance > 0 ? (allowance * cat.allocation) / 100 : 0;
+              const spent = getSpentForCategory(cat);
+              const spentPercent = budgetAmount > 0 ? Math.min((spent / budgetAmount) * 100, 100) : 0;
+              const isOverBudget = spent > budgetAmount && budgetAmount > 0;
 
               return (
                 <div key={cat.id} className="p-4 rounded-xl bg-muted/50">
@@ -138,7 +218,7 @@ const Budget = () => {
                       <div>
                         <p className="font-medium text-foreground">{cat.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          ₱{cat.spent.toLocaleString()} of ₱{budgetAmount.toLocaleString()}
+                          ₱{spent.toLocaleString()} of ₱{budgetAmount.toLocaleString()}
                         </p>
                       </div>
                     </div>
@@ -162,7 +242,7 @@ const Budget = () => {
                   
                   {isOverBudget && (
                     <p className="text-xs text-destructive mt-2">
-                      Over budget by ₱{(cat.spent - budgetAmount).toLocaleString()}!
+                      Over budget by ₱{(spent - budgetAmount).toLocaleString()}!
                     </p>
                   )}
                 </div>
