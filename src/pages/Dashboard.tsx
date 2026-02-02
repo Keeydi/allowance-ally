@@ -10,29 +10,43 @@ import {
   PiggyBank,
   TrendingUp,
   TrendingDown,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from "lucide-react";
-
-// Mock data for demo
-const mockData = {
-  balance: 650,
-  allowance: 2500,
-  spent: 1850,
-  budgetUsed: 74,
-  recentExpenses: [
-    { id: 1, category: "Food", amount: 150, date: "Today" },
-    { id: 2, category: "Transportation", amount: 80, date: "Yesterday" },
-    { id: 3, category: "School", amount: 250, date: "Jan 4" },
-  ],
-  savingsGoal: {
-    name: "New Backpack",
-    target: 1500,
-    current: 850,
-  },
-};
+import { useExpenses } from "@/hooks/useExpenses";
+import { useBudgets } from "@/hooks/useBudgets";
+import { useSavingsGoals } from "@/hooks/useSavingsGoals";
 
 const Dashboard = () => {
-  const savingsProgress = (mockData.savingsGoal.current / mockData.savingsGoal.target) * 100;
+  const { expenses, isLoading: expensesLoading } = useExpenses();
+  const { allowance, isLoading: budgetsLoading } = useBudgets();
+  const { goals, isLoading: savingsLoading } = useSavingsGoals();
+
+  const isLoading = expensesLoading || budgetsLoading || savingsLoading;
+
+  // Calculate real data
+  const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const remaining = allowance - totalSpent;
+  const budgetUsed = allowance > 0 ? Math.min(Math.round((totalSpent / allowance) * 100), 100) : 0;
+
+  // Get the first savings goal for display
+  const primaryGoal = goals.length > 0 ? goals[0] : null;
+  const savingsProgress = primaryGoal 
+    ? (Number(primaryGoal.current_amount) / Number(primaryGoal.target_amount)) * 100 
+    : 0;
+
+  // Get recent expenses (last 3)
+  const recentExpenses = expenses.slice(0, 3);
+
+  if (isLoading) {
+    return (
+      <UserLayout title="Dashboard" subtitle="Your financial overview">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </UserLayout>
+    );
+  }
 
   return (
     <UserLayout title="Dashboard" subtitle="Your financial overview">
@@ -78,9 +92,13 @@ const Dashboard = () => {
               </span>
               <Wallet className="h-5 w-5 text-primary-foreground/80" />
             </div>
-            <p className="text-4xl font-bold mb-1">₱{mockData.balance.toLocaleString()}</p>
+            <p className="text-4xl font-bold mb-1">
+              {allowance > 0 ? `₱${remaining.toLocaleString()}` : "₱0"}
+            </p>
             <p className="text-primary-foreground/70 text-sm">
-              of ₱{mockData.allowance.toLocaleString()} monthly allowance
+              {allowance > 0 
+                ? `of ₱${allowance.toLocaleString()} monthly allowance`
+                : "Set your allowance in Budget"}
             </p>
           </div>
 
@@ -89,11 +107,11 @@ const Dashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-foreground">Budget Status</h3>
               <span className="text-sm font-medium text-muted-foreground">
-                {mockData.budgetUsed}% used
+                {budgetUsed}% used
               </span>
             </div>
             
-            <Progress value={mockData.budgetUsed} className="h-3 mb-4" />
+            <Progress value={budgetUsed} className="h-3 mb-4" />
             
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
@@ -102,7 +120,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Income</p>
-                  <p className="font-semibold text-foreground">₱{mockData.allowance.toLocaleString()}</p>
+                  <p className="font-semibold text-foreground">₱{allowance.toLocaleString()}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -111,7 +129,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Spent</p>
-                  <p className="font-semibold text-foreground">₱{mockData.spent.toLocaleString()}</p>
+                  <p className="font-semibold text-foreground">₱{totalSpent.toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -124,41 +142,54 @@ const Dashboard = () => {
               <PiggyBank className="h-5 w-5 text-primary" />
             </div>
             
-            <p className="text-sm text-muted-foreground mb-2">{mockData.savingsGoal.name}</p>
-            
-            <div className="relative w-24 h-24 mx-auto mb-4">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle
-                  cx="48"
-                  cy="48"
-                  r="40"
-                  fill="none"
-                  stroke="hsl(var(--muted))"
-                  strokeWidth="8"
-                />
-                <circle
-                  cx="48"
-                  cy="48"
-                  r="40"
-                  fill="none"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={`${savingsProgress * 2.51} 251`}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-foreground">
-                  {Math.round(savingsProgress)}%
-                </span>
+            {primaryGoal ? (
+              <>
+                <p className="text-sm text-muted-foreground mb-2">{primaryGoal.name}</p>
+                
+                <div className="relative w-24 h-24 mx-auto mb-4">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r="40"
+                      fill="none"
+                      stroke="hsl(var(--muted))"
+                      strokeWidth="8"
+                    />
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r="40"
+                      fill="none"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth="8"
+                      strokeLinecap="round"
+                      strokeDasharray={`${savingsProgress * 2.51} 251`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-lg font-bold text-foreground">
+                      {Math.round(savingsProgress)}%
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">
+                    ₱{Number(primaryGoal.current_amount).toLocaleString()} of ₱{Number(primaryGoal.target_amount).toLocaleString()}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground text-sm mb-2">No savings goals yet</p>
+                <Link to="/savings">
+                  <Button variant="outline" size="sm">
+                    Create Goal
+                  </Button>
+                </Link>
               </div>
-            </div>
-            
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">
-                ₱{mockData.savingsGoal.current.toLocaleString()} of ₱{mockData.savingsGoal.target.toLocaleString()}
-              </p>
-            </div>
+            )}
           </div>
 
           {/* Recent Expenses */}
@@ -173,27 +204,31 @@ const Dashboard = () => {
               </Link>
             </div>
             
-            <div className="space-y-3">
-              {mockData.recentExpenses.map((expense) => (
-                <div
-                  key={expense.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-background">
-                      <Minus className="h-4 w-4 text-muted-foreground" />
+            {recentExpenses.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No expenses yet. Start tracking!</p>
+            ) : (
+              <div className="space-y-3">
+                {recentExpenses.map((expense) => (
+                  <div
+                    key={expense.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-background">
+                        <Minus className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{expense.category}</p>
+                        <p className="text-xs text-muted-foreground">{expense.date}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-foreground">{expense.category}</p>
-                      <p className="text-xs text-muted-foreground">{expense.date}</p>
-                    </div>
+                    <span className="font-semibold text-foreground">
+                      -₱{Number(expense.amount).toLocaleString()}
+                    </span>
                   </div>
-                  <span className="font-semibold text-foreground">
-                    -₱{expense.amount}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
