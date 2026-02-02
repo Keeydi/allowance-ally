@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Edit, Trash2, Video, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useVideoTips } from "@/hooks/useVideoTips";
+import { toast } from "@/hooks/use-toast";
 
 const AdminVideoTips = () => {
   const { videos, isLoading, addVideo, updateVideo, deleteVideo } = useVideoTips();
@@ -20,17 +21,62 @@ const AdminVideoTips = () => {
     category: "",
   });
 
+  // SECURITY: Allowlist of trusted video platform domains
+  const ALLOWED_VIDEO_DOMAINS = ['youtube.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com'];
+
+  const isValidVideoUrl = (url: string): boolean => {
+    try {
+      const urlObj = new URL(url);
+      return ALLOWED_VIDEO_DOMAINS.some(domain => urlObj.hostname.includes(domain));
+    } catch {
+      return false;
+    }
+  };
+
   const extractVideoId = (url: string) => {
     const match = url.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^&\s]+)/);
+    return match ? match[1] : null;
+  };
+
+  const extractVimeoId = (url: string) => {
+    const match = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/);
     return match ? match[1] : null;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const videoId = extractVideoId(formData.videoUrl);
-    const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : formData.videoUrl;
-    const thumbnail = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
+    // SECURITY: Validate URL is from trusted video platforms only
+    if (!isValidVideoUrl(formData.videoUrl)) {
+      toast({
+        title: "Invalid video URL",
+        description: "Please enter a valid YouTube or Vimeo URL",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const youtubeId = extractVideoId(formData.videoUrl);
+    const vimeoId = extractVimeoId(formData.videoUrl);
+    
+    let embedUrl: string;
+    let thumbnail: string | null = null;
+    
+    if (youtubeId) {
+      embedUrl = `https://www.youtube.com/embed/${youtubeId}`;
+      thumbnail = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`;
+    } else if (vimeoId) {
+      embedUrl = `https://player.vimeo.com/video/${vimeoId}`;
+      thumbnail = null; // Vimeo thumbnails require API access
+    } else {
+      // This shouldn't happen due to validation above, but fallback safely
+      toast({
+        title: "Unsupported video format",
+        description: "Please use a standard YouTube or Vimeo video URL",
+        variant: "destructive"
+      });
+      return;
+    }
 
     if (editingVideo) {
       updateVideo.mutate({

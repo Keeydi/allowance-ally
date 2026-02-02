@@ -35,6 +35,8 @@ export const useVideoTips = () => {
 
   const addVideo = useMutation({
     mutationFn: async (video: Omit<VideoTip, "id" | "created_at" | "updated_at" | "created_by">) => {
+      // UI-only check for better UX - actual authorization enforced by RLS policies
+      // The database will reject this request if the user is not an admin
       if (!user || !isAdmin) throw new Error("Not authorized");
       const { data, error } = await supabase
         .from("video_tips")
