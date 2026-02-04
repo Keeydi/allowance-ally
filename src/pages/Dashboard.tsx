@@ -11,23 +11,32 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowRight,
-  Loader2
+  Loader2,
+  CalendarDays
 } from "lucide-react";
 import { useExpenses } from "@/hooks/useExpenses";
-import { useBudgets } from "@/hooks/useBudgets";
+import { useDailyBudget } from "@/hooks/useDailyBudget";
 import { useSavingsGoals } from "@/hooks/useSavingsGoals";
 
 const Dashboard = () => {
   const { expenses, isLoading: expensesLoading } = useExpenses();
-  const { allowance, isLoading: budgetsLoading } = useBudgets();
+  const { 
+    monthlyAllowance,
+    availableToday,
+    rolloverAmount,
+    dailyBudget,
+    totalSpentThisMonth,
+    remainingMonthly,
+    currentDay,
+    daysInMonth,
+    isLoading: budgetsLoading 
+  } = useDailyBudget();
   const { goals, isLoading: savingsLoading } = useSavingsGoals();
 
   const isLoading = expensesLoading || budgetsLoading || savingsLoading;
 
-  // Calculate real data
-  const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const remaining = allowance - totalSpent;
-  const budgetUsed = allowance > 0 ? Math.min(Math.round((totalSpent / allowance) * 100), 100) : 0;
+  // Budget used percentage
+  const budgetUsed = monthlyAllowance > 0 ? Math.min(Math.round((totalSpentThisMonth / monthlyAllowance) * 100), 100) : 0;
 
   // Get the first savings goal for display
   const primaryGoal = goals.length > 0 ? goals[0] : null;
@@ -84,22 +93,31 @@ const Dashboard = () => {
 
         {/* Main Cards Grid */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Balance Card */}
+          {/* Balance Card - Now shows daily available with rollover */}
           <div className="md:col-span-2 lg:col-span-1 rounded-2xl bg-gradient-primary p-6 text-primary-foreground shadow-glow">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-primary-foreground/80 text-sm font-medium">
-                Remaining Balance
-              </span>
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary-foreground/80" />
+                <span className="text-primary-foreground/80 text-sm font-medium">
+                  Today's Budget (Day {currentDay}/{daysInMonth})
+                </span>
+              </div>
               <Wallet className="h-5 w-5 text-primary-foreground/80" />
             </div>
             <p className="text-4xl font-bold mb-1">
-              {allowance > 0 ? `₱${remaining.toLocaleString()}` : "₱0"}
+              {monthlyAllowance > 0 ? `₱${availableToday.toLocaleString()}` : "₱0"}
             </p>
             <p className="text-primary-foreground/70 text-sm">
-              {allowance > 0 
-                ? `of ₱${allowance.toLocaleString()} monthly allowance`
+              {monthlyAllowance > 0 
+                ? availableToday < 0 ? "Over budget today!" : "available today"
                 : "Set your allowance in Budget"}
             </p>
+            {rolloverAmount > 0 && (
+              <div className="mt-2 flex items-center gap-1 text-sm text-primary-foreground/80">
+                <TrendingUp className="h-3 w-3" />
+                <span>+₱{rolloverAmount.toLocaleString()} carried over</span>
+              </div>
+            )}
           </div>
 
           {/* Budget Overview Card */}
@@ -119,8 +137,8 @@ const Dashboard = () => {
                   <TrendingUp className="h-4 w-4 text-success" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Income</p>
-                  <p className="font-semibold text-foreground">₱{allowance.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Daily Budget</p>
+                  <p className="font-semibold text-foreground">₱{dailyBudget.toLocaleString()}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -128,8 +146,8 @@ const Dashboard = () => {
                   <TrendingDown className="h-4 w-4 text-warning" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Spent</p>
-                  <p className="font-semibold text-foreground">₱{totalSpent.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Month Spent</p>
+                  <p className="font-semibold text-foreground">₱{totalSpentThisMonth.toLocaleString()}</p>
                 </div>
               </div>
             </div>
