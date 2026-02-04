@@ -11,9 +11,12 @@ import {
   PiggyBank,
   ShoppingBag,
   MoreHorizontal,
-  Loader2
+  Loader2,
+  CalendarDays,
+  TrendingUp
 } from "lucide-react";
 import { useExpenses } from "@/hooks/useExpenses";
+import { useDailyBudget } from "@/hooks/useDailyBudget";
 
 const categories = [
   { name: "Food", icon: Utensils, color: "bg-orange-100 text-orange-600" },
@@ -26,6 +29,15 @@ const categories = [
 
 const Expenses = () => {
   const { expenses, isLoading, addExpense, deleteExpense } = useExpenses();
+  const { 
+    availableToday, 
+    spentToday, 
+    todaysTotalBudget, 
+    rolloverAmount,
+    currentDay,
+    daysInMonth,
+    isLoading: budgetLoading 
+  } = useDailyBudget();
   
   const [showForm, setShowForm] = useState(false);
   const [newExpense, setNewExpense] = useState({
@@ -61,7 +73,7 @@ const Expenses = () => {
     return cat || categories[5];
   };
 
-  if (isLoading) {
+  if (isLoading || budgetLoading) {
     return (
       <UserLayout title="Expense Tracking" subtitle="Track where your money goes">
         <div className="flex items-center justify-center py-12">
@@ -75,11 +87,47 @@ const Expenses = () => {
     <UserLayout title="Expense Tracking" subtitle="Track where your money goes">
       <div className="max-w-4xl mx-auto">
 
-        {/* Summary Card */}
-        <div className="rounded-2xl bg-gradient-warning p-6 text-white mb-6">
-          <p className="text-white/80 text-sm mb-1">Total Expenses</p>
-          <p className="text-3xl font-bold">₱{totalExpenses.toLocaleString()}</p>
-          <p className="text-white/70 text-sm mt-1">{expenses.length} transactions</p>
+        {/* Today's Summary Card */}
+        <div className="rounded-2xl bg-gradient-warning p-6 text-white mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <CalendarDays className="h-4 w-4 text-white/80" />
+            <p className="text-white/80 text-sm">Today (Day {currentDay}/{daysInMonth})</p>
+          </div>
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-white/70 text-xs">Spent Today</p>
+              <p className="text-3xl font-bold">₱{spentToday.toLocaleString()}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-white/70 text-xs">Remaining Today</p>
+              <p className={`text-2xl font-bold ${availableToday < 0 ? "text-red-200" : ""}`}>
+                ₱{availableToday.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          
+          {rolloverAmount > 0 && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-white/80">
+              <TrendingUp className="h-3 w-3" />
+              <span>Includes ₱{rolloverAmount.toLocaleString()} carried over from yesterday</span>
+            </div>
+          )}
+          
+          <div className="mt-3 pt-3 border-t border-white/20">
+            <p className="text-white/70 text-xs">Today's Budget</p>
+            <p className="font-semibold">₱{todaysTotalBudget.toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* Total Expenses Card */}
+        <div className="rounded-2xl border border-border bg-card p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-muted-foreground text-xs">Total This Month</p>
+              <p className="text-xl font-bold text-foreground">₱{totalExpenses.toLocaleString()}</p>
+            </div>
+            <p className="text-muted-foreground text-sm">{expenses.length} transactions</p>
+          </div>
         </div>
 
         {/* Add Expense Button */}

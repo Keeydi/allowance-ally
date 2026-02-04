@@ -2,11 +2,15 @@ import { useState } from "react";
 import { UserLayout } from "@/components/layout/UserLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, PiggyBank, Target, Trash2, TrendingUp, Loader2 } from "lucide-react";
+import { Plus, PiggyBank, Target, Trash2, TrendingUp, Loader2, Lightbulb } from "lucide-react";
 import { useSavingsGoals } from "@/hooks/useSavingsGoals";
+import { useDailyBudget } from "@/hooks/useDailyBudget";
+import { useBudgets } from "@/hooks/useBudgets";
 
 const Savings = () => {
   const { goals, isLoading, addGoal, updateGoal, deleteGoal } = useSavingsGoals();
+  const { dailyBudget, monthlyAllowance } = useDailyBudget();
+  const { allocations } = useBudgets();
   
   const [showForm, setShowForm] = useState(false);
   const [newGoal, setNewGoal] = useState({
@@ -16,6 +20,11 @@ const Savings = () => {
   });
 
   const [addToGoal, setAddToGoal] = useState<{ id: string; amount: string } | null>(null);
+
+  // Calculate recommended daily savings based on 20% savings allocation
+  const savingsAllocation = allocations.find(a => a.category === "savings")?.amount || 20;
+  const recommendedDailySavings = Math.round((dailyBudget * savingsAllocation) / 100);
+  const recommendedMonthlySavings = Math.round((monthlyAllowance * savingsAllocation) / 100);
 
   const handleCreateGoal = () => {
     if (!newGoal.name || !newGoal.target || parseFloat(newGoal.target) <= 0) {
@@ -65,6 +74,24 @@ const Savings = () => {
   return (
     <UserLayout title="Savings Goals" subtitle="Build your future, one peso at a time">
       <div className="max-w-4xl mx-auto">
+
+        {/* Daily Savings Suggestion */}
+        {monthlyAllowance > 0 && (
+          <div className="rounded-2xl border border-primary/20 bg-secondary p-4 mb-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-primary text-primary-foreground shrink-0">
+                <Lightbulb className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground text-sm">Daily Savings Goal</p>
+                <p className="text-sm text-muted-foreground">
+                  Save <span className="font-semibold text-primary">₱{recommendedDailySavings}/day</span> to hit 
+                  <span className="font-semibold text-primary"> ₱{recommendedMonthlySavings}/month</span> ({savingsAllocation}% of your budget)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Summary Card */}
         <div className="rounded-2xl bg-gradient-primary p-6 text-primary-foreground mb-6">
