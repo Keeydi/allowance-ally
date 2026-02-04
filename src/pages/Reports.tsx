@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { TrendingUp, TrendingDown, PieChart, BarChart3, Calendar } from "lucide-react";
+import { useState, useMemo } from "react";
+import { TrendingUp, TrendingDown, PieChart, BarChart3, Calendar, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserLayout } from "@/components/layout/UserLayout";
@@ -9,38 +9,9 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, LineChart, Line, ResponsiveContainer } from "recharts";
-
-// Mock data for charts
-const expensesByCategory = [
-  { name: "Food", value: 450, fill: "hsl(var(--success))" },
-  { name: "Transportation", value: 200, fill: "hsl(var(--warning))" },
-  { name: "School", value: 300, fill: "hsl(var(--info))" },
-  { name: "Wants", value: 150, fill: "hsl(var(--destructive))" },
-  { name: "Others", value: 100, fill: "hsl(var(--muted-foreground))" },
-];
-
-const weeklyTrend = [
-  { day: "Mon", spent: 120, budget: 150 },
-  { day: "Tue", spent: 80, budget: 150 },
-  { day: "Wed", spent: 200, budget: 150 },
-  { day: "Thu", spent: 90, budget: 150 },
-  { day: "Fri", spent: 180, budget: 150 },
-  { day: "Sat", spent: 250, budget: 150 },
-  { day: "Sun", spent: 100, budget: 150 },
-];
-
-const budgetVsActual = [
-  { category: "Needs", budget: 600, actual: 550 },
-  { category: "Wants", budget: 300, actual: 380 },
-  { category: "Savings", budget: 300, actual: 200 },
-];
-
-const monthlyOverview = [
-  { month: "Jan", income: 3000, expenses: 2400 },
-  { month: "Feb", income: 3000, expenses: 2100 },
-  { month: "Mar", income: 3200, expenses: 2800 },
-  { month: "Apr", income: 3000, expenses: 2200 },
-];
+import { useExpenses } from "@/hooks/useExpenses";
+import { useDailyBudget } from "@/hooks/useDailyBudget";
+import { useBudgets } from "@/hooks/useBudgets";
 
 const chartConfig = {
   spent: { label: "Spent", color: "hsl(var(--destructive))" },
@@ -50,12 +21,114 @@ const chartConfig = {
   expenses: { label: "Expenses", color: "hsl(var(--destructive))" },
 };
 
+const categoryColors: Record<string, string> = {
+  Food: "hsl(var(--warning))",
+  Transportation: "hsl(var(--info))",
+  School: "hsl(142, 76%, 36%)",
+  Savings: "hsl(var(--success))",
+  Wants: "hsl(var(--destructive))",
+  Others: "hsl(var(--muted-foreground))",
+};
+
 const Reports = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month">("week");
-  
+  const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month">("month");
+  const { expenses, isLoading: expensesLoading } = useExpenses();
+  const { dailyBudget, monthlyAllowance, daysInMonth } = useDailyBudget();
+  const { allocations, isLoading: budgetsLoading } = useBudgets();
+
+  // Calculate expenses by category from real data
+  const expensesByCategory = useMemo(() => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    const monthlyExpenses = expenses.filter(e => {
+      const expenseDate = new Date(e.date);
+      return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+    });
+
+    const categoryTotals: Record<string, number> = {};
+    monthlyExpenses.forEach(e => {
+      categoryTotals[e.category] = (categoryTotals[e.category] || 0) + Number(e.amount);
+    });
+
+    return Object.entries(categoryTotals).map(([name, value]) => ({
+      name,
+      value,
+      fill: categoryColors[name] || "hsl(var(--muted-foreground))",
+    }));
+  }, [expenses]);
+
+  // Calculate weekly trend from real data
+  const weeklyTrend = useMemo(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    
+    return days.map((day, index) => {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() - dayOfWeek + index);
+      const dateStr = targetDate.toISOString().split("T")[0];
+      
+      const dayExpenses = expenses.filter(e => e.date === dateStr);
+      const spent = dayExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      
+      return { day, spent, budget: dailyBudget };
+    });
+  }, [expenses, dailyBudget]);
+
+  // Calculate budget vs actual
+  const budgetVsActual = useMemo(() => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    const monthlyExpenses = expenses.filter(e => {
+      const expenseDate = new Date(e.date);
+      return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+    });
+
+    // Map categories to budget types
+    const needsCategories = ["Food", "Transportation", "School"];
+    const wantsCategories = ["Wants", "Others"];
+    const savingsCategories = ["Savings"];
+
+    const needsAllocation = allocations.find(a => a.category === "needs")?.amount || 50;
+    const wantsAllocation = allocations.find(a => a.category === "wants")?.amount || 30;
+    const savingsAllocation = allocations.find(a => a.category === "savings")?.amount || 20;
+
+    const needsBudget = Math.round((monthlyAllowance * needsAllocation) / 100);
+    const wantsBudget = Math.round((monthlyAllowance * wantsAllocation) / 100);
+    const savingsBudget = Math.round((monthlyAllowance * savingsAllocation) / 100);
+
+    const needsActual = monthlyExpenses.filter(e => needsCategories.includes(e.category)).reduce((sum, e) => sum + Number(e.amount), 0);
+    const wantsActual = monthlyExpenses.filter(e => wantsCategories.includes(e.category)).reduce((sum, e) => sum + Number(e.amount), 0);
+    const savingsActual = monthlyExpenses.filter(e => savingsCategories.includes(e.category)).reduce((sum, e) => sum + Number(e.amount), 0);
+
+    return [
+      { category: "Needs", budget: needsBudget, actual: needsActual },
+      { category: "Wants", budget: wantsBudget, actual: wantsActual },
+      { category: "Savings", budget: savingsBudget, actual: savingsActual },
+    ];
+  }, [expenses, allocations, monthlyAllowance]);
+
   const totalExpenses = expensesByCategory.reduce((sum, cat) => sum + cat.value, 0);
-  const avgDaily = Math.round(totalExpenses / 7);
-  const topCategory = expensesByCategory.reduce((a, b) => a.value > b.value ? a : b);
+  const avgDaily = expenses.length > 0 ? Math.round(totalExpenses / Math.min(new Date().getDate(), daysInMonth)) : 0;
+  const topCategory = expensesByCategory.length > 0 
+    ? expensesByCategory.reduce((a, b) => a.value > b.value ? a : b) 
+    : { name: "None", value: 0 };
+
+  const isLoading = expensesLoading || budgetsLoading;
+
+  if (isLoading) {
+    return (
+      <UserLayout title="Reports & Insights" subtitle="Understand your spending behavior">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </UserLayout>
+    );
+  }
 
   return (
     <UserLayout title="Reports & Insights" subtitle="Understand your spending behavior">
@@ -244,32 +317,37 @@ const Reports = () => {
             </CardContent>
           </Card>
 
-          {/* Monthly Income vs Expenses */}
+          {/* This Month Summary */}
           <Card className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-primary" />
-                Monthly Overview
+                This Month Summary
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[300px]">
-                <BarChart data={monthlyOverview}>
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `₱${v}`} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="income" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expenses" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-              <div className="flex justify-center gap-6 mt-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-3 h-3 rounded bg-success" />
-                  <span className="text-muted-foreground">Income</span>
+              <div className="space-y-6">
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground mb-1">Monthly Allowance</p>
+                  <p className="text-3xl font-bold text-foreground">₱{monthlyAllowance.toLocaleString()}</p>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-3 h-3 rounded bg-destructive" />
-                  <span className="text-muted-foreground">Expenses</span>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-destructive/10 text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Total Spent</p>
+                    <p className="text-xl font-bold text-destructive">₱{totalExpenses.toLocaleString()}</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-success/10 text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Remaining</p>
+                    <p className="text-xl font-bold text-success">₱{(monthlyAllowance - totalExpenses).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-muted text-center">
+                  <p className="text-sm text-muted-foreground mb-1">Usage</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {monthlyAllowance > 0 ? Math.round((totalExpenses / monthlyAllowance) * 100) : 0}% of budget used
+                  </p>
                 </div>
               </div>
             </CardContent>
