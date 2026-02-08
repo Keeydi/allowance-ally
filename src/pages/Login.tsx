@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,18 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, isAdmin, loading } = useAuth();
+
+  // Redirect authenticated users based on role
+  useEffect(() => {
+    if (!loading && user) {
+      if (isAdmin) {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
+    }
+  }, [user, isAdmin, loading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,9 +45,9 @@ const Login = () => {
         }
         toast({
           title: "Welcome back!",
-          description: "Redirecting to your dashboard...",
+          description: "Checking your account...",
         });
-        navigate("/dashboard");
+        // Navigation will be handled by the useEffect above once role is loaded
       } else {
         const { error } = await signUp(email, password, displayName);
         if (error) {
