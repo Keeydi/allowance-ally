@@ -2,16 +2,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
-
-const mockUsers = [
-  { id: 1, name: "John Doe", email: "john@example.com", status: "Active", joined: "2025-01-01", savings: "₱12,500" },
-  { id: 2, name: "Jane Smith", email: "jane@example.com", status: "Active", joined: "2025-01-03", savings: "₱8,200" },
-  { id: 3, name: "Mike Johnson", email: "mike@example.com", status: "Inactive", joined: "2025-01-05", savings: "₱3,100" },
-  { id: 4, name: "Sarah Williams", email: "sarah@example.com", status: "Active", joined: "2025-01-07", savings: "₱15,800" },
-  { id: 5, name: "Chris Brown", email: "chris@example.com", status: "Active", joined: "2025-01-10", savings: "₱6,400" },
-];
+import { useAdminUsers } from "@/hooks/useAdminUsers";
+import { Loader2, Users } from "lucide-react";
 
 const AdminUsers = () => {
+  const { users, isLoading, error } = useAdminUsers();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-destructive">Error loading users: {error.message}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-card/80 backdrop-blur-md">
@@ -26,7 +38,7 @@ const AdminUsers = () => {
             <Link to="/admin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
             <Link to="/admin/users" className="text-sm font-medium text-foreground">Users</Link>
             <Link to="/admin/video-tips" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Video Tips</Link>
-            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
+            <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
           </nav>
         </div>
       </header>
@@ -39,35 +51,53 @@ const AdminUsers = () => {
 
         <Card className="border-border/50 bg-card/50">
           <CardHeader>
-            <CardTitle>All Users ({mockUsers.length})</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              All Users ({users.length})
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="text-right">Total Savings</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={user.status === "Active" ? "default" : "secondary"}>
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{user.joined}</TableCell>
-                    <TableCell className="text-right font-medium text-primary">{user.savings}</TableCell>
+            {users.length === 0 ? (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No users registered yet.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead className="text-right">Total Savings</TableHead>
+                    <TableHead className="text-right">Total Expenses</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">
+                        {user.display_name || "Anonymous User"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={user.role === "admin" ? "default" : "secondary"}>
+                          {user.role === "admin" ? "Admin" : "User"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(user.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-primary">
+                        ₱{user.total_savings.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-muted-foreground">
+                        ₱{user.total_expenses.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </main>
