@@ -1,13 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Video, TrendingUp, MessageSquare } from "lucide-react";
+import { Users, Video, TrendingUp, MessageSquare, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAdminStats } from "@/hooks/useAdminStats";
 
 const AdminDashboard = () => {
-  const stats = [
-    { label: "Total Users", value: "1,234", icon: Users, color: "text-primary" },
-    { label: "Video Tips", value: "48", icon: Video, color: "text-emerald-500" },
-    { label: "Active This Week", value: "892", icon: TrendingUp, color: "text-amber-500" },
-    { label: "Feedback Received", value: "156", icon: MessageSquare, color: "text-purple-500" },
+  const { stats, isLoading, error } = useAdminStats();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const statCards = [
+    { label: "Total Users", value: stats?.totalUsers.toLocaleString() || "0", icon: Users, color: "text-primary" },
+    { label: "Video Tips", value: stats?.totalVideoTips.toLocaleString() || "0", icon: Video, color: "text-emerald-500" },
+    { label: "Active This Week", value: stats?.activeThisWeek.toLocaleString() || "0", icon: TrendingUp, color: "text-amber-500" },
+    { label: "Feedback Received", value: stats?.totalFeedback.toLocaleString() || "0", icon: MessageSquare, color: "text-purple-500" },
   ];
 
   return (
@@ -24,7 +35,7 @@ const AdminDashboard = () => {
             <Link to="/admin" className="text-sm font-medium text-foreground">Dashboard</Link>
             <Link to="/admin/users" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Users</Link>
             <Link to="/admin/video-tips" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Video Tips</Link>
-            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
+            <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Exit Admin</Link>
           </nav>
         </div>
       </header>
@@ -35,8 +46,14 @@ const AdminDashboard = () => {
           <p className="text-muted-foreground mt-1">Manage your BudgetBuddy platform</p>
         </div>
 
+        {error && (
+          <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg">
+            Error loading stats: {error.message}
+          </div>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          {stats.map((stat) => (
+          {statCards.map((stat) => (
             <Card key={stat.label} className="border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
@@ -78,21 +95,26 @@ const AdminDashboard = () => {
 
           <Card className="border-border/50 bg-card/50">
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>Platform Info</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {[
-                  { action: "New user registered", time: "2 minutes ago" },
-                  { action: "Video tip uploaded", time: "1 hour ago" },
-                  { action: "Feedback submitted", time: "3 hours ago" },
-                  { action: "Budget goal achieved", time: "5 hours ago" },
-                ].map((activity, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                    <span className="text-sm text-foreground">{activity.action}</span>
-                    <span className="text-xs text-muted-foreground">{activity.time}</span>
-                  </div>
-                ))}
+                <div className="flex items-center justify-between py-2 border-b border-border/50">
+                  <span className="text-sm text-foreground">Total Users</span>
+                  <span className="text-sm font-medium text-primary">{stats?.totalUsers || 0}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-border/50">
+                  <span className="text-sm text-foreground">Video Tips Available</span>
+                  <span className="text-sm font-medium text-emerald-500">{stats?.totalVideoTips || 0}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-border/50">
+                  <span className="text-sm text-foreground">Active Users (7 days)</span>
+                  <span className="text-sm font-medium text-amber-500">{stats?.activeThisWeek || 0}</span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-foreground">Feedback Submissions</span>
+                  <span className="text-sm font-medium text-purple-500">{stats?.totalFeedback || 0}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
