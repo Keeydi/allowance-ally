@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Wallet, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -13,6 +14,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetLoading, setIsResetLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { signIn, signUp, user, isAdmin, loading } = useAuth();
@@ -67,6 +69,41 @@ const Login = () => {
       setIsLoading(false);
     }
   };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({
+        title: "Enter your email",
+        description: "Type your email first, then click Forgot password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        toast({
+          title: "Could not send reset email",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Password reset email sent",
+        description: "Check your inbox for a link to reset your password.",
+      });
+    } finally {
+      setIsResetLoading(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-hero flex flex-col">
@@ -150,6 +187,17 @@ const Login = () => {
                   "Create Account"
                 )}
               </Button>
+
+              {isLogin && (
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={isResetLoading}
+                  className="w-full text-sm text-muted-foreground hover:text-primary transition-colors disabled:opacity-60"
+                >
+                  {isResetLoading ? "Sending reset email..." : "Forgot password?"}
+                </button>
+              )}
             </form>
 
             <div className="mt-6 text-center">
